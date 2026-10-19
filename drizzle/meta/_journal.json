@@ -15,6 +15,13 @@
       "when": 1792410388930,
       "tag": "0001_jazzy_peter_quill",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792411264392,
+      "tag": "0002_careless_spot",
+      "breakpoints": true
     }
   ]
 }
