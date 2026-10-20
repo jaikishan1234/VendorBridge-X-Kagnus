@@ -1,0 +1,85 @@
+
+import { NextResponse } from "next/server";
+import { and, eq, gt } from "drizzle-orm";
+import { db } from "@/db";
+import { passwordResetTokens, sessions, users } from "@/db/schema";
+import { hashPassword } from "@/lib/password";
+import { hashPasswordResetToken } from "@/lib/password-reset";
+import { z } from "zod";
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8).max(128),
+});
+
+export async function POST(request: Request) {
+  try {
+    const body: unknown = await request.json();
+    const result = resetPasswordSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { message: "A valid token and password of at least 8 characters are required" },
+        { status: 400 },
+      );
+    }
+
+    const tokenHash = hashPasswordResetToken(result.data.token);
+
+    const response = await db.transaction(async (tx) => {
+      const [resetToken] = await tx
+        .select()
+        .from(passwordResetTokens)
+        .where(
+          and(
+            eq(passwordResetTokens.tokenHash, tokenHash),
+            gt(passwordResetTokens.expiresAt, new Date()),
+          ),
+        )
+        .limit(1);
+
+      if (!resetToken) {
+        return false;
+      }
+
+      const passwordHash = await hashPassword(result.data.password);
+
+      await tx
+        .update(users)
+        .set({
+          passwordHash,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, resetToken.userId));
+
+      await tx
+        .delete(passwordResetTokens)
+        .where(eq(passwordResetTokens.id, resetToken.id));
+
+      // Revoke all existing sessions after a password reset.
+      await tx
+        .delete(sessions)
+        .where(eq(sessions.userId, resetToken.userId));
+
+      return true;
+    });
+
+    if (!response) {
+      return NextResponse.json(
+        { message: "Invalid or expired reset token" },
+        { status: 400 },
+      );
+    }
+
+    return NextResponse.json({
+      message: "Password reset successful. Please log in again.",
+    });
+  } catch (error) {
+    console.error("Reset-password error:", error);
+
+    return NextResponse.json(
+      { message: "An unexpected error occurred" },
+      { status: 500 },
+    );
+  }
+}
