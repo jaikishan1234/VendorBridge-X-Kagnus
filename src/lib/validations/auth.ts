@@ -21,3 +21,10 @@ export const registerSchema = z.object({
   additionalInformation: z.string().trim().max(1000).optional(),
 
 });
+
+export const loginSchema = z.object({
+  identifier: z.string().trim().min(1, "Username or email is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
