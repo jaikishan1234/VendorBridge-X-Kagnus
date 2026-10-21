@@ -6,25 +6,31 @@ import {
   generatePasswordResetToken,
   hashPasswordResetToken,
 } from "@/lib/password-reset";
+import { forgotPasswordSchema } from "@/lib/validations/auth";
 
 export async function POST(request: Request) {
   try {
-    const body: unknown = await request.json();
+    let body: unknown;
 
-    if (
-      typeof body !== "object" ||
-      body === null ||
-      !("email" in body) ||
-      typeof body.email !== "string" ||
-      !body.email.trim()
-    ) {
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { message: "Invalid JSON request body" },
+        { status: 400 },
+      );
+    }
+
+    const result = forgotPasswordSchema.safeParse(body);
+
+    if (!result.success) {
       return NextResponse.json(
         { message: "A valid email is required" },
         { status: 400 },
       );
     }
 
-    const email = body.email.trim().toLowerCase();
+    const email = result.data.email.toLowerCase();
 
     const [user] = await db
       .select({ id: users.id })

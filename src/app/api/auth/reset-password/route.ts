@@ -14,7 +14,17 @@ const resetPasswordSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const body: unknown = await request.json();
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { message: "Invalid JSON request body" },
+        { status: 400 },
+      );
+    }
+
     const result = resetPasswordSchema.safeParse(body);
 
     if (!result.success) {

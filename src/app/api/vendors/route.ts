@@ -21,7 +21,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const body: unknown = await request.json();
+    let body: unknown;
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { message: "Invalid JSON request body" },
+        { status: 400 },
+      );
+    }
+
     const result = createVendorSchema.safeParse(body);
 
     if (!result.success) {
