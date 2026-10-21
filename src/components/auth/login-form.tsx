@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -186,7 +187,7 @@ export function LoginForm() {
         </p>
       ) : null}
 
-      <div className="mt-7 flex justify-center">
+      <div className="mt-7 flex flex-col items-center gap-4">
         <Button
           className="h-11 min-w-24 rounded-[4px] border-[#8a8a8a] bg-transparent px-6 text-sm font-medium text-[#efefef] hover:border-[#d4d4d4] hover:bg-[#252525] focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50 dark:border-[#8a8a8a] dark:bg-transparent dark:text-[#efefef] dark:hover:bg-[#252525] disabled:cursor-wait"
           disabled={isSubmitting}
@@ -195,6 +196,15 @@ export function LoginForm() {
         >
           {isSubmitting ? "Logging in…" : "Login"}
         </Button>
+        <p className="text-sm text-[#b7b7b7]">
+          Don&apos;t have an account?{" "}
+          <Link
+            className="underline-offset-4 transition-colors hover:text-[#efefef] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
+            href="/register"
+          >
+            Create an account
+          </Link>
+        </p>
       </div>
     </form>
   );
