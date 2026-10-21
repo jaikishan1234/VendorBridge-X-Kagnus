@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AppShell } from "@/components/app-shell";
 import type { UserRole } from "@/db/schema";
 
 type DashboardUser = {
@@ -11,18 +12,6 @@ type DashboardShellProps = {
   user: DashboardUser;
   requestedFeature?: string;
 };
-
-const navigationItems = [
-  "Dashboard",
-  "Vendors",
-  "RFQs",
-  "Quotations",
-  "Approvals",
-  "Purchase Orders",
-  "Invoices",
-  "Reports",
-  "Activity",
-];
 
 const summaryCards = [
   "Active RFQs",
@@ -44,58 +33,21 @@ function featureHref(feature: string) {
 }
 
 export function DashboardShell({ user, requestedFeature }: DashboardShellProps) {
-  const knownFeature = navigationItems.includes(requestedFeature ?? "")
+  const knownFeature = [
+    "RFQs",
+    "Quotations",
+    "Approvals",
+    "Purchase Orders",
+    "Invoices",
+    "Reports",
+    "Activity",
+  ].includes(requestedFeature ?? "")
     ? requestedFeature
     : undefined;
-  const avatarLetter = user.username.charAt(0).toUpperCase();
 
   return (
-    <main className="min-h-[100dvh] w-full overflow-x-hidden bg-[#111111] text-[#e8e8e8]">
-      <div className="flex min-h-[100dvh] w-full flex-col bg-[#111111]">
-        <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#8a8a8a] bg-[#082820] px-4 sm:px-6">
-          <Link
-            className="text-sm font-medium tracking-tight text-[#f1f1f1] outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/60"
-            href="/dashboard"
-          >
-            VendorBridge
-          </Link>
-          <div
-            aria-label={`Signed in as ${user.username}`}
-            className="flex size-8 items-center justify-center rounded-full border border-[#b7b7b7] text-xs font-medium text-[#e8e8e8]"
-            title={user.email}
-          >
-            {avatarLetter}
-          </div>
-        </header>
-
-        <div className="flex flex-1 flex-col md:flex-row">
-          <aside className="border-b border-[#8a8a8a] p-3 md:w-56 md:shrink-0 md:border-r md:border-b-0 md:p-4">
-            <nav aria-label="Primary navigation" className="grid grid-cols-2 gap-1 md:block">
-              {navigationItems.map((item) => {
-                const isDashboard = item === "Dashboard";
-
-                return (
-                  <Link
-                    aria-current={isDashboard ? "page" : undefined}
-                    className={`block rounded-[4px] px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/60 md:mb-1 ${
-                      isDashboard
-                        ? "bg-[#087020] text-[#f2f2f2]"
-                        : "text-[#d6d6d6] hover:bg-[#252525]"
-                    }`}
-                    href={isDashboard ? "/dashboard" : featureHref(item)}
-                    key={item}
-                  >
-                    <span aria-hidden="true" className="mr-2 text-[#b7b7b7]">
-                      -
-                    </span>
-                    {item}
-                  </Link>
-                );
-              })}
-            </nav>
-          </aside>
-
-          <section className="min-w-0 flex-1 p-5 sm:p-7 lg:p-8">
+    <AppShell activeItem="Dashboard" user={user}>
+      <section className="min-w-0 flex-1 p-5 sm:p-7 lg:p-8">
             <header>
               <h1 className="text-2xl font-medium tracking-tight sm:text-3xl">
                 Dashboard
@@ -198,7 +150,7 @@ export function DashboardShell({ user, requestedFeature }: DashboardShellProps) 
               </Link>
               <Link
                 className="inline-flex h-10 items-center justify-center rounded-[5px] border border-[#8a8a8a] px-5 text-sm font-medium text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
-                href={featureHref("Vendors")}
+                href="/vendors/new"
               >
                 Add Vendor
               </Link>
@@ -209,9 +161,7 @@ export function DashboardShell({ user, requestedFeature }: DashboardShellProps) 
                 View Invoices
               </Link>
             </div>
-          </section>
-        </div>
-      </div>
-    </main>
+      </section>
+    </AppShell>
   );
 }
