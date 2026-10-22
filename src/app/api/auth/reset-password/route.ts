@@ -35,24 +35,22 @@ export async function POST(request: Request) {
     }
 
     const tokenHash = hashPasswordResetToken(result.data.token);
+    const passwordHash = await hashPassword(result.data.password);
 
     const response = await db.transaction(async (tx) => {
       const [resetToken] = await tx
-        .select()
-        .from(passwordResetTokens)
+        .delete(passwordResetTokens)
         .where(
           and(
             eq(passwordResetTokens.tokenHash, tokenHash),
             gt(passwordResetTokens.expiresAt, new Date()),
           ),
         )
-        .limit(1);
+        .returning({ userId: passwordResetTokens.userId });
 
       if (!resetToken) {
         return false;
       }
-
-      const passwordHash = await hashPassword(result.data.password);
 
       await tx
         .update(users)
@@ -61,10 +59,6 @@ export async function POST(request: Request) {
           updatedAt: new Date(),
         })
         .where(eq(users.id, resetToken.userId));
-
-      await tx
-        .delete(passwordResetTokens)
-        .where(eq(passwordResetTokens.id, resetToken.id));
 
       // Revoke all existing sessions after a password reset.
       await tx
