@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   select: vi.fn(),
   insert: vi.fn(),
+  values: vi.fn(),
   verifyPassword: vi.fn(),
   generateSessionToken: vi.fn(),
   hashSessionToken: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/lib/session", () => ({
 }));
 
 import { POST } from "@/app/api/auth/login/route";
+import { sessions } from "@/db/schema";
 
 const validUser = {
   id: "d90a1cc4-fcb5-4556-a301-8ece6f20e1a7",
@@ -55,6 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("POST /api/auth/login", () => {
@@ -116,6 +119,71 @@ describe("POST /api/auth/login", () => {
     await expect(response.json()).resolves.toEqual({
       message: "Invalid username/email or password",
     });
+  });
+
+  it("creates a hashed session and returns a secure public login response", async () => {
+    const now = new Date("2026-10-22T00:00:00.000Z");
+    const password = "correct-horse-battery-staple";
+    const sessionToken = "raw-session-token";
+    const tokenHash = "hashed-session-token";
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    mockUserLookup(validUser);
+    mocks.verifyPassword.mockResolvedValue(true);
+    mocks.generateSessionToken.mockReturnValue(sessionToken);
+    mocks.hashSessionToken.mockReturnValue(tokenHash);
+    mocks.values.mockResolvedValue(undefined);
+    mocks.insert.mockReturnValue({ values: mocks.values });
+
+    const response = await POST(
+      loginRequest(
+        JSON.stringify({ identifier: validUser.email, password }),
+      ),
+    );
+    const body = await response.json();
+    const sessionCookie = response.cookies.get("session");
+    const cookieExpiry = sessionCookie?.expires;
+
+    expect(response.status).toBe(200);
+    expect(mocks.verifyPassword).toHaveBeenCalledWith(
+      validUser.passwordHash,
+      password,
+    );
+    expect(mocks.generateSessionToken).toHaveBeenCalledOnce();
+    expect(mocks.hashSessionToken).toHaveBeenCalledWith(sessionToken);
+    expect(mocks.insert).toHaveBeenCalledWith(sessions);
+    expect(mocks.values).toHaveBeenCalledWith({
+      userId: validUser.id,
+      tokenHash,
+      expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+    });
+    expect(JSON.stringify(mocks.values.mock.calls[0][0])).not.toContain(
+      sessionToken,
+    );
+    expect(body).toEqual({
+      message: "Login successful",
+      user: {
+        id: validUser.id,
+        username: validUser.username,
+        email: validUser.email,
+        role: validUser.role,
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(password);
+    expect(JSON.stringify(body)).not.toContain(validUser.passwordHash);
+    expect(sessionCookie).toMatchObject({
+      value: sessionToken,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+    });
+    expect(
+      typeof cookieExpiry === "number"
+        ? cookieExpiry
+        : cookieExpiry?.getTime(),
+    ).toBe(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    expect(sessionCookie?.maxAge).toBeUndefined();
   });
 
   it("returns a generic error without exposing an internal failure", async () => {
