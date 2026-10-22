@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { LogoutButton } from "@/components/auth/logout-button";
 import type { UserRole } from "@/db/schema";
 
 type AppShellUser = {
@@ -46,12 +47,15 @@ export function AppShell({ user, activeItem, children }: AppShellProps) {
           >
             VendorBridge
           </Link>
-          <div
-            aria-label={`Signed in as ${user.username}`}
-            className="flex size-8 items-center justify-center rounded-full border border-[#b7b7b7] text-xs font-medium text-[#e8e8e8]"
-            title={user.email}
-          >
-            {avatarLetter}
+          <div className="flex items-center gap-3">
+            <LogoutButton />
+            <div
+              aria-label={`Signed in as ${user.username}`}
+              className="flex size-8 items-center justify-center rounded-full border border-[#b7b7b7] text-xs font-medium text-[#e8e8e8]"
+              title={user.email}
+            >
+              {avatarLetter}
+            </div>
           </div>
         </header>
 
