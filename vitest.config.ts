@@ -13,6 +13,11 @@ export default defineConfig({
     passWithNoTests: true,
     projects: [
       {
+        resolve: {
+          alias: {
+            "@": path.join(rootDirectory, "src"),
+          },
+        },
         test: {
           name: "unit",
           environment: "node",
@@ -20,6 +25,11 @@ export default defineConfig({
         },
       },
       {
+        resolve: {
+          alias: {
+            "@": path.join(rootDirectory, "src"),
+          },
+        },
         test: {
           name: "integration",
           environment: "node",
