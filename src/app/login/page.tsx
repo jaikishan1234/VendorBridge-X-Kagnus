@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
+import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Login | VendorBridge",
 };
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getCurrentUser();
+
+  if (user) {
+    redirect("/dashboard");
+  }
+
   return (
     <main className="flex min-h-[100svh] items-center justify-center bg-[#111111] px-5 py-10 text-[#e8e8e8] sm:px-8">
       <section aria-labelledby="login-heading" className="w-full max-w-[400px]">
