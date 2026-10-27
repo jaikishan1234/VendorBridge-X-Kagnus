@@ -139,3 +139,63 @@ body {
     @apply font-sans;
   }
 }
+
+.rfq-deadline-popper {
+  z-index: 50;
+}
+
+.react-datepicker-wrapper,
+.react-datepicker__input-container {
+  display: block;
+  width: 100%;
+}
+
+.rfq-deadline-calendar.react-datepicker {
+  overflow: hidden;
+  border: 1px solid #777777;
+  border-radius: 5px;
+  background: #151515;
+  color: #ededed;
+  font-family: inherit;
+}
+
+.rfq-deadline-calendar .react-datepicker__header {
+  border-bottom-color: #545454;
+  background: #252525;
+}
+
+.rfq-deadline-calendar .react-datepicker__current-month,
+.rfq-deadline-calendar .react-datepicker-time__header,
+.rfq-deadline-calendar .react-datepicker__day-name,
+.rfq-deadline-calendar .react-datepicker__day,
+.rfq-deadline-calendar .react-datepicker__time-list-item {
+  color: #ededed;
+}
+
+.rfq-deadline-calendar .react-datepicker__day:hover,
+.rfq-deadline-calendar .react-datepicker__time-list-item:hover {
+  background: #3a3a3a;
+}
+
+.rfq-deadline-calendar .react-datepicker__day--selected,
+.rfq-deadline-calendar .react-datepicker__day--keyboard-selected,
+.rfq-deadline-calendar .react-datepicker__time-list-item--selected {
+  background: #d8d8d8;
+  color: #151515;
+}
+
+.rfq-deadline-calendar .react-datepicker__day--disabled {
+  color: #777777;
+}
+
+.rfq-deadline-calendar .react-datepicker__time-container {
+  border-left-color: #545454;
+}
+
+.rfq-deadline-calendar .react-datepicker__time-list {
+  background: #151515;
+}
+
+.rfq-deadline-calendar .react-datepicker__navigation-icon::before {
+  border-color: #ededed;
+}

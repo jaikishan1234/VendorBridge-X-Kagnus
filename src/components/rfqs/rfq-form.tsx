@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import type { ZodError } from "zod";
+import { DeadlinePicker } from "@/components/rfqs/deadline-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -145,14 +146,7 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
 
     if (isSubmitting) return;
 
-    const deadline = new Date(values.deadline);
-    const payload: RfqFormValues = {
-      ...values,
-      deadline: Number.isNaN(deadline.getTime())
-        ? values.deadline
-        : deadline.toISOString(),
-    };
-    const result = createRfqSchema.safeParse(payload);
+    const result = createRfqSchema.safeParse(values);
 
     if (!result.success) {
       setFieldErrors(getFieldErrors(result.error));
@@ -252,15 +246,12 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
 
         <div>
           <Label htmlFor="deadline">Quotation Deadline</Label>
-          <Input
-            aria-describedby={fieldErrors.deadline ? "deadline-error" : undefined}
-            aria-invalid={Boolean(fieldErrors.deadline)}
-            className={inputClassName}
+          <DeadlinePicker
+            describedBy={fieldErrors.deadline ? "deadline-error" : undefined}
             disabled={isSubmitting}
             id="deadline"
-            onChange={(event) => updateField("deadline", event.target.value)}
-            required
-            type="datetime-local"
+            invalid={Boolean(fieldErrors.deadline)}
+            onChange={(value) => updateField("deadline", value)}
             value={values.deadline}
           />
           {fieldErrors.deadline ? <p className="mt-1 text-xs text-[#f19a9a]" id="deadline-error">{fieldErrors.deadline}</p> : null}

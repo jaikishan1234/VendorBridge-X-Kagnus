@@ -149,6 +149,18 @@ npx drizzle-kit migrate --config drizzle.config.test.ts
 
 Do not point either test setting at a development or production database. This repository does not run migrations automatically as part of `npm test`.
 
+### Test procurement-officer provisioning
+
+For manual RFQ testing, the repository provides an explicitly invoked local CLI that creates one `PROCUREMENT_OFFICER` only on the isolated branch configured by `.env.test.local`. It never reads `DATABASE_URL` or `.env.local`.
+
+Before it can write, the CLI verifies the live Neon branch ID against `TEST_NEON_BRANCH_ID`, using the same check as integration tests. It prompts for the password without echoing it, refuses to overwrite an existing username or email, and is not exposed through the application.
+
+```powershell
+npm.cmd run provision:test-procurement-officer -- --email procurement.test@example.com --username procurement-test
+```
+
+Use a dedicated non-production test branch only. The command requires both `TEST_DATABASE_URL` and `TEST_NEON_BRANCH_ID` in `.env.test.local`, and exits before writing when the branch identity cannot be verified.
+
 ## Commands
 
 | Task | Command |

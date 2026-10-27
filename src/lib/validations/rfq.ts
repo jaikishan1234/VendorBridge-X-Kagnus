@@ -27,7 +27,8 @@ export const createRfqSchema = z
       .transform((value) => value.toUpperCase()),
     deadline: z
       .string()
-      .datetime({ offset: true, message: "Deadline must include a timezone." })
+      .min(1, "Quotation deadline is required.")
+      .datetime({ offset: true, message: "Select a valid date and time." })
       .transform((value) => new Date(value))
       .refine((value) => value.getTime() > Date.now(), "Deadline must be in the future."),
     lineItems: z.array(rfqLineItemSchema).min(1, "Add at least one line item.").max(100),
