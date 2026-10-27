@@ -113,6 +113,16 @@ The Drizzle schema is in `src/db/schema.ts`; generated SQL migrations and snapsh
 - `sessions` for hashed, expiring server sessions.
 - `password_reset_tokens` for hashed, expiring one-time reset tokens.
 
+### Week 2 database foundation
+
+The forward-only Week 2 migration adds the RFQ and quotation data foundation only; it does not add RFQ UI, APIs, attachment storage, account-linking endpoints, or alter registration behavior.
+
+- `vendor_user_memberships` links a vendor account to one vendor while allowing a vendor to have multiple accounts. Existing users and vendors are intentionally left unlinked.
+- `rfqs`, `rfq_line_items`, and `rfq_vendor_assignments` model RFQs, their requested items, and assigned vendors.
+- `quotations` and `quotation_line_items` model one quotation per assigned vendor/RFQ pair. Composite foreign keys ensure a quotation is for an assignment and each quoted line belongs to that quotation's RFQ.
+- RFQ and quotation statuses are database enums; allowed state transitions remain application logic.
+- Each RFQ has one `currency` value, shared by every quotation for that RFQ. Quotation unit prices use PostgreSQL `numeric(14,2)` (up to 12 digits before, and 2 digits after, the decimal) and Drizzle represents them as strings. Requested item quantities use `numeric(14,3)`.
+
 ### Development database
 
 `drizzle.config.ts` loads `DATABASE_URL` from `.env.local` and uses the schema and migration directory above. After setting the placeholder-derived local value to your own authorized database URL, apply committed migrations with:

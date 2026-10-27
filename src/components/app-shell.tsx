@@ -11,7 +11,7 @@ type AppShellUser = {
 
 type AppShellProps = {
   user: AppShellUser;
-  activeItem: "Dashboard" | "Vendors";
+  activeItem: "Dashboard" | "Vendors" | "RFQs";
   children: ReactNode;
 };
 
@@ -30,6 +30,7 @@ const navigationItems = [
 function navigationHref(item: string) {
   if (item === "Dashboard") return "/dashboard";
   if (item === "Vendors") return "/vendors";
+  if (item === "RFQs") return "/rfqs";
 
   return `/dashboard?comingSoon=${encodeURIComponent(item)}`;
 }
