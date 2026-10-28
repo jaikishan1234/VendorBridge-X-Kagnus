@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getCurrentUser: vi.fn(),
+  requireRole: vi.fn(),
   insert: vi.fn(),
   values: vi.fn(),
   returning: vi.fn(),
@@ -13,17 +13,15 @@ vi.mock("@/db", () => ({
   },
 }));
 
-vi.mock("@/lib/auth", () => ({
-  getCurrentUser: mocks.getCurrentUser,
-}));
+vi.mock("@/lib/authorization", () => ({ requireRole: mocks.requireRole }));
 
 import { POST } from "@/app/api/vendors/route";
 
-const authenticatedVendorUser = {
+const procurementUser = {
   id: "c799790b-3f9d-4a99-999e-9d0c6aeeb6dd",
   username: "vendor-user",
   email: "vendor@example.com",
-  role: "VENDOR" as const,
+  role: "PROCUREMENT_OFFICER" as const,
 };
 
 const validVendor = {
@@ -59,7 +57,7 @@ afterEach(() => {
 
 describe("POST /api/vendors", () => {
   it("returns 401 when unauthenticated", async () => {
-    mocks.getCurrentUser.mockResolvedValue(null);
+    mocks.requireRole.mockResolvedValue({ authorized: false, status: 401 });
 
     const response = await POST(
       new Request("http://localhost/api/vendors", { method: "POST" }),
@@ -72,7 +70,7 @@ describe("POST /api/vendors", () => {
 
   it("creates a vendor for an authenticated user with valid input", async () => {
     const createdVendor = { id: "a243a6e2-0ce9-4ee2-9198-057ec142a286" };
-    mocks.getCurrentUser.mockResolvedValue(authenticatedVendorUser);
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementUser });
     mockVendorInsert(createdVendor);
 
     const response = await POST(vendorRequest(JSON.stringify(validVendor)));
@@ -88,7 +86,7 @@ describe("POST /api/vendors", () => {
   });
 
   it("rejects malformed creation JSON without persisting a vendor", async () => {
-    mocks.getCurrentUser.mockResolvedValue(authenticatedVendorUser);
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementUser });
 
     const response = await POST(vendorRequest("{"));
 
@@ -100,7 +98,7 @@ describe("POST /api/vendors", () => {
   });
 
   it("rejects invalid creation input without persisting a vendor", async () => {
-    mocks.getCurrentUser.mockResolvedValue(authenticatedVendorUser);
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementUser });
 
     const response = await POST(
       vendorRequest(JSON.stringify({ ...validVendor, vendorName: "" })),
@@ -118,7 +116,7 @@ describe("POST /api/vendors", () => {
   });
 
   it("returns 409 for a duplicate GST number", async () => {
-    mocks.getCurrentUser.mockResolvedValue(authenticatedVendorUser);
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementUser });
     mocks.returning.mockRejectedValue({ code: "23505" });
     mocks.values.mockReturnValue({ returning: mocks.returning });
     mocks.insert.mockReturnValue({ values: mocks.values });
@@ -133,7 +131,7 @@ describe("POST /api/vendors", () => {
 
   it("returns a generic error without exposing a database failure", async () => {
     const internalDetail = "database password: should-not-be-disclosed";
-    mocks.getCurrentUser.mockResolvedValue(authenticatedVendorUser);
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementUser });
     mocks.returning.mockRejectedValue(new Error(internalDetail));
     mocks.values.mockReturnValue({ returning: mocks.returning });
     mocks.insert.mockReturnValue({ values: mocks.values });
@@ -145,5 +143,16 @@ describe("POST /api/vendors", () => {
     expect(response.status).toBe(500);
     expect(body).toEqual({ message: "An unexpected error occurred" });
     expect(JSON.stringify(body)).not.toContain(internalDetail);
+  });
+
+  it("forbids a VENDOR from creating an unrelated supplier profile", async () => {
+    mocks.requireRole.mockResolvedValue({ authorized: false, status: 403 });
+
+    const response = await POST(vendorRequest(JSON.stringify(validVendor)));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ message: "Forbidden" });
+    expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.requireRole).toHaveBeenCalledWith(["PROCUREMENT_OFFICER"]);
   });
 });

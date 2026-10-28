@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { vendors } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireRole } from "@/lib/authorization";
 import { createVendorSchema } from "@/lib/validations/vendor";
 
 function isUniqueViolation(error: unknown): boolean {
@@ -15,10 +15,13 @@ function isUniqueViolation(error: unknown): boolean {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const authorization = await requireRole(["PROCUREMENT_OFFICER"]);
 
-    if (!user) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    if (!authorization.authorized) {
+      return NextResponse.json(
+        { message: authorization.status === 401 ? "Unauthorized" : "Forbidden" },
+        { status: authorization.status },
+      );
     }
 
     let body: unknown;

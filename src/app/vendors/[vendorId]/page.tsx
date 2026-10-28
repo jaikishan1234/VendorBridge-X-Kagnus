@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/db";
 import { vendors } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireRole } from "@/lib/authorization";
 
 type VendorDetailPageProps = {
   params: Promise<{ vendorId: string }>;
@@ -15,11 +15,13 @@ function formatStatus(status: string) {
 }
 
 export default async function VendorDetailPage({ params }: VendorDetailPageProps) {
-  const user = await getCurrentUser();
+  const authorization = await requireRole(["PROCUREMENT_OFFICER"]);
 
-  if (!user) {
-    redirect("/login");
+  if (!authorization.authorized) {
+    redirect(authorization.status === 401 ? "/login" : "/dashboard");
   }
+
+  const user = authorization.user;
 
   const { vendorId } = await params;
   let vendor: typeof vendors.$inferSelect | undefined;

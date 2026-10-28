@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/rfq-access", () => ({ getRfqViewer: mocks.getRfqViewer }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
 vi.mock("drizzle-orm", () => ({ eq: mocks.eq, desc: mocks.desc }));
+vi.mock("next/link", () => ({ default: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: React.ReactNode }) => children }));
 
 import RfqsPage from "@/app/rfqs/page";

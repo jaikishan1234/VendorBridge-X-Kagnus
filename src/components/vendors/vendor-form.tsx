@@ -20,6 +20,12 @@ type VendorValues = {
 
 type VendorFieldErrors = Partial<Record<keyof VendorValues, string>>;
 
+type VendorFormProps = {
+  endpoint?: "/api/vendors" | "/api/vendor-profile";
+  redirectTo?: string;
+  submitLabel?: string;
+};
+
 const initialValues: VendorValues = {
   vendorName: "",
   category: "",
@@ -75,7 +81,11 @@ function getVendorId(payload: unknown): string | undefined {
     : undefined;
 }
 
-export function VendorForm() {
+export function VendorForm({
+  endpoint = "/api/vendors",
+  redirectTo,
+  submitLabel = "Save Vendor",
+}: VendorFormProps) {
   const router = useRouter();
   const [values, setValues] = useState<VendorValues>(initialValues);
   const [fieldErrors, setFieldErrors] = useState<VendorFieldErrors>({});
@@ -106,7 +116,7 @@ export function VendorForm() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/vendors", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -129,7 +139,7 @@ export function VendorForm() {
         return;
       }
 
-      router.replace(`/vendors/${vendorId}`);
+      router.replace(redirectTo ?? `/vendors/${vendorId}`);
     } catch {
       setFormError("Unable to reach VendorBridge. Please try again.");
     } finally {
@@ -283,7 +293,7 @@ export function VendorForm() {
           type="submit"
           variant="outline"
         >
-          {isSubmitting ? "Saving..." : "Save Vendor"}
+          {isSubmitting ? "Saving..." : submitLabel}
         </Button>
         <Link
           className="inline-flex h-10 items-center justify-center rounded-[5px] border border-[#6e6e6e] px-5 text-sm text-[#d6d6d6] transition-colors hover:bg-[#252525] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"

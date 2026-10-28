@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { VendorForm } from "@/components/vendors/vendor-form";
-import { getCurrentUser } from "@/lib/auth";
+import { requireRole } from "@/lib/authorization";
 
 export default async function NewVendorPage() {
-  const user = await getCurrentUser();
+  const authorization = await requireRole(["PROCUREMENT_OFFICER"]);
 
-  if (!user) {
-    redirect("/login");
+  if (!authorization.authorized) {
+    redirect(authorization.status === 401 ? "/login" : "/dashboard");
   }
+
+  const user = authorization.user;
 
   return (
     <AppShell activeItem="Vendors" user={user}>

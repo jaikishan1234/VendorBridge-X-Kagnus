@@ -76,9 +76,17 @@ export default async function RfqsPage() {
         </header>
 
         {isUnlinkedVendor ? (
-          <p className="mt-7 rounded-[6px] border border-[#777777] bg-[#151515] p-5 text-sm text-[#c7c7c7]">
-            Your account is not linked to a vendor profile yet. Contact your procurement team for access to assigned RFQs.
-          </p>
+          <div className="mt-7 rounded-[6px] border border-[#777777] bg-[#151515] p-5 text-sm text-[#c7c7c7]">
+            <p>
+              Your account is not linked to a vendor profile yet. Create a profile for a new organization, or contact your procurement team to request access to an existing profile.
+            </p>
+            <Link
+              className="mt-4 inline-flex h-9 items-center justify-center rounded-[4px] border border-[#8a8a8a] px-4 text-sm text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
+              href="/vendor-profile/new"
+            >
+              Create My Vendor Profile
+            </Link>
+          </div>
         ) : (
           <div className="mt-7 overflow-hidden rounded-[6px] border border-[#777777]">
             <div className="overflow-x-auto">

@@ -4,7 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Input } from "@/components/ui/input";
 import { db } from "@/db";
 import { vendors } from "@/db/schema";
-import { getCurrentUser } from "@/lib/auth";
+import { requireRole } from "@/lib/authorization";
 import { redirect } from "next/navigation";
 
 const statusFilters = ["ACTIVE", "PENDING", "BLOCKED"] as const;
@@ -40,11 +40,13 @@ function vendorListHref(query: string, status?: VendorStatusFilter) {
 }
 
 export default async function VendorsPage({ searchParams }: VendorsPageProps) {
-  const user = await getCurrentUser();
+  const authorization = await requireRole(["PROCUREMENT_OFFICER"]);
 
-  if (!user) {
-    redirect("/login");
+  if (!authorization.authorized) {
+    redirect(authorization.status === 401 ? "/login" : "/dashboard");
   }
+
+  const user = authorization.user;
 
   const params = await searchParams;
   const query = getSingleSearchParam(params.query).trim().slice(0, 100);
