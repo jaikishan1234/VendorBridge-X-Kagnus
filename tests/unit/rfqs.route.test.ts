@@ -42,6 +42,7 @@ const vendorTwoId = "b2222222-2222-4222-8222-222222222222";
 
 const validRfq = {
   title: "Office equipment refresh",
+  category: "IT Equipment",
   description: "Laptops and monitors for the support team.",
   currency: "usd",
   deadline: "2100-01-15T12:00:00.000Z",
@@ -140,6 +141,22 @@ describe("POST /api/rfqs", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
+  it("rejects a category outside the shared RFQ category list", async () => {
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementOfficer });
+
+    const response = await POST(
+      rfqRequest(JSON.stringify({ ...validRfq, category: "Unapproved category" })),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(body).toMatchObject({
+      message: "Review the RFQ details and try again.",
+      fieldErrors: { category: expect.any(Array) },
+    });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
   it("creates the RFQ, its line items, and assignments in one transaction", async () => {
     mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementOfficer });
     mockTransaction();
@@ -156,6 +173,7 @@ describe("POST /api/rfqs", () => {
     expect(mocks.rfqValues).toHaveBeenCalledWith(
       expect.objectContaining({
         title: validRfq.title,
+        category: validRfq.category,
         description: validRfq.description,
         currency: "USD",
         createdByUserId: procurementOfficer.id,

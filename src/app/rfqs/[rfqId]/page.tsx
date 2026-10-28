@@ -48,6 +48,7 @@ export default async function RfqDetailPage({ params, searchParams }: RfqDetailP
     id: rfqs.id,
     rfqNumber: rfqs.rfqNumber,
     title: rfqs.title,
+    category: rfqs.category,
     description: rfqs.description,
     status: rfqs.status,
     deadline: rfqs.deadline,
@@ -127,6 +128,7 @@ export default async function RfqDetailPage({ params, searchParams }: RfqDetailP
           <p className="mt-2 text-sm text-[#c7c7c7]">
             {formatStatus(rfq.status)} · Deadline: {formatDeadline(rfq.deadline)} · {rfq.currency}
           </p>
+          <p className="mt-1 text-sm text-[#c7c7c7]">Category: {rfq.category}</p>
           {rfq.description ? (
             <p className="mt-5 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-[#d6d6d6]">
               {rfq.description}

@@ -3,7 +3,7 @@
 import { upload } from "@imagekit/javascript";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type DragEvent, type FormEvent } from "react";
+import { useState, type DragEvent, type FormEvent } from "react";
 import type { ZodError } from "zod";
 import { DeadlinePicker } from "@/components/rfqs/deadline-picker";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,11 @@ import {
   MAX_RFQ_ATTACHMENT_SIZE,
   validateAttachmentMetadata,
 } from "@/lib/rfq-attachments";
-import { createRfqSchema, type CreateRfqInput } from "@/lib/validations/rfq";
+import {
+  createRfqSchema,
+  rfqCategories,
+  type CreateRfqInput,
+} from "@/lib/validations/rfq";
 
 type VendorOption = {
   id: string;
@@ -26,7 +30,11 @@ type RfqLineItemValues = {
   quantity: string;
   unit: string;
 };
-type RfqFormValues = Omit<CreateRfqInput, "lineItems" | "vendorIds"> & {
+type RfqFormValues = Omit<
+  CreateRfqInput,
+  "category" | "lineItems" | "vendorIds"
+> & {
+  category: "" | (typeof rfqCategories)[number];
   lineItems: RfqLineItemValues[];
   vendorIds: string[];
 };
@@ -34,6 +42,7 @@ type RfqFieldErrors = Partial<Record<keyof RfqFormValues, string>>;
 
 const initialValues: RfqFormValues = {
   title: "",
+  category: "",
   description: "",
   currency: "",
   deadline: "",
@@ -49,6 +58,7 @@ function getFieldErrors(error: ZodError): RfqFieldErrors {
     const field = issue.path[0];
     if (
       (field === "title" ||
+        field === "category" ||
         field === "description" ||
         field === "currency" ||
         field === "deadline" ||
@@ -120,21 +130,14 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<File[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState("");
   const [showVendorPicker, setShowVendorPicker] = useState(false);
   const [isDraggingAttachment, setIsDraggingAttachment] = useState(false);
 
-  const vendorCategories = useMemo(
-    () => [...new Set(vendors.map((vendor) => vendor.category))].sort(),
-    [vendors],
-  );
   const selectedVendors = vendors.filter((vendor) =>
     values.vendorIds.includes(vendor.id),
   );
   const availableVendors = vendors.filter(
-    (vendor) =>
-      !values.vendorIds.includes(vendor.id) &&
-      (!categoryFilter || vendor.category === categoryFilter),
+    (vendor) => !values.vendorIds.includes(vendor.id),
   );
 
   function updateField(
@@ -372,24 +375,31 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="category">RFQ Category</Label>
               <select
+                aria-describedby={
+                  fieldErrors.category ? "category-error" : undefined
+                }
+                aria-invalid={Boolean(fieldErrors.category)}
                 className={`${inputClassName} w-full`}
                 disabled={isSubmitting}
                 id="category"
-                onChange={(event) => setCategoryFilter(event.target.value)}
-                value={categoryFilter}
+                onChange={(event) => updateField("category", event.target.value)}
+                required
+                value={values.category}
               >
-                <option value="">All vendor categories</option>
-                {vendorCategories.map((category) => (
+                <option disabled value="">Select a category</option>
+                {rfqCategories.map((category) => (
                   <option key={category} value={category}>
                     {category}
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-[#a8a8a8]">
-                Filters the vendor list; RFQs do not persist a category.
-              </p>
+              {fieldErrors.category ? (
+                <p className="mt-1 text-xs text-[#f19a9a]" id="category-error">
+                  {fieldErrors.category}
+                </p>
+              ) : null}
             </div>
             <div>
               <Label htmlFor="currency">Currency</Label>
@@ -602,7 +612,7 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
               <div className="mt-2 grid gap-2 rounded-[4px] border border-[#666666] p-2 sm:grid-cols-2">
                 {availableVendors.length === 0 ? (
                   <p className="p-1 text-xs text-[#a8a8a8]">
-                    No available vendors in this category.
+                    No available vendors.
                   </p>
                 ) : (
                   availableVendors.map((vendor) => (

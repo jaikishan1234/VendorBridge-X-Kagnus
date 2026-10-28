@@ -2,6 +2,20 @@ import { z } from "zod";
 
 const quantityPattern = /^\d{1,11}(?:\.\d{1,3})?$/;
 
+export const rfqCategories = [
+  "Office Supplies",
+  "Furniture",
+  "IT Equipment",
+  "Stationery",
+  "Hardware",
+  "Services",
+  "Other",
+] as const;
+
+export const rfqCategorySchema = z.enum(rfqCategories, {
+  error: "Select a valid RFQ category.",
+});
+
 export const rfqLineItemSchema = z.object({
   description: z.string().trim().min(1, "Line-item description is required.").max(1000),
   quantity: z
@@ -15,6 +29,7 @@ export const rfqLineItemSchema = z.object({
 export const createRfqSchema = z
   .object({
     title: z.string().trim().min(1, "RFQ title is required.").max(200),
+    category: rfqCategorySchema,
     description: z
       .string()
       .trim()

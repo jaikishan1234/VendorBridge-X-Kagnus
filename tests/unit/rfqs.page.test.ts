@@ -47,6 +47,9 @@ describe("/rfqs page", () => {
 
     await RfqsPage();
 
+    expect(mocks.select).toHaveBeenCalledWith(
+      expect.objectContaining({ category: rfqs.category }),
+    );
     expect(from).toHaveBeenCalledWith(rfqVendorAssignments);
     expect(innerJoin).toHaveBeenCalledWith(
       rfqs,
@@ -84,6 +87,9 @@ describe("/rfqs page", () => {
 
     await RfqsPage();
 
+    expect(mocks.select).toHaveBeenCalledWith(
+      expect.objectContaining({ category: rfqs.category }),
+    );
     expect(from).toHaveBeenCalledWith(rfqs);
   });
 });

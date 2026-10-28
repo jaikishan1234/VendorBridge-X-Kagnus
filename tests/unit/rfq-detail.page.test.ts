@@ -62,6 +62,9 @@ describe("/rfqs/[rfqId] page", () => {
       RfqDetailPage({ params: Promise.resolve({ rfqId: unassignedRfqId }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
 
+    expect(mocks.select).toHaveBeenCalledWith(
+      expect.objectContaining({ category: rfqs.category }),
+    );
     expect(from).toHaveBeenCalledWith(rfqs);
     expect(innerJoin).toHaveBeenCalledWith(
       rfqVendorAssignments,

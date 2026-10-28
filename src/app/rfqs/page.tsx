@@ -32,6 +32,7 @@ export default async function RfqsPage() {
     id: rfqs.id,
     rfqNumber: rfqs.rfqNumber,
     title: rfqs.title,
+    category: rfqs.category,
     status: rfqs.status,
     deadline: rfqs.deadline,
     currency: rfqs.currency,
@@ -86,6 +87,7 @@ export default async function RfqsPage() {
                   <tr>
                     <th className="px-4 py-3 font-medium" scope="col">RFQ</th>
                     <th className="px-4 py-3 font-medium" scope="col">Title</th>
+                    <th className="px-4 py-3 font-medium" scope="col">Category</th>
                     <th className="px-4 py-3 font-medium" scope="col">Status</th>
                     <th className="px-4 py-3 font-medium" scope="col">Deadline</th>
                     <th className="px-4 py-3 font-medium" scope="col">Action</th>
@@ -94,7 +96,7 @@ export default async function RfqsPage() {
                 <tbody>
                   {rfqRows.length === 0 ? (
                     <tr>
-                      <td className="px-4 py-10 text-center text-sm text-[#a8a8a8]" colSpan={5}>
+                      <td className="px-4 py-10 text-center text-sm text-[#a8a8a8]" colSpan={6}>
                         {isProcurement
                           ? "No RFQs have been created yet."
                           : "No RFQs are currently assigned to your vendor."}
@@ -105,6 +107,7 @@ export default async function RfqsPage() {
                       <tr className="border-t border-[#454545]" key={rfq.id}>
                         <td className="px-4 py-3 font-mono text-xs text-[#efefef]">{rfq.rfqNumber}</td>
                         <td className="px-4 py-3 text-[#d6d6d6]">{rfq.title}</td>
+                        <td className="px-4 py-3 text-[#d6d6d6]">{rfq.category}</td>
                         <td className="px-4 py-3 text-[#d6d6d6]">{formatStatus(rfq.status)}</td>
                         <td className="px-4 py-3 text-[#d6d6d6]">{formatDeadline(rfq.deadline)} · {rfq.currency}</td>
                         <td className="px-4 py-3">

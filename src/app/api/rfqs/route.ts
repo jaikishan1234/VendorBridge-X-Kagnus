@@ -49,6 +49,7 @@ async function createRfq(
           .values({
             rfqNumber: generateRfqNumber(),
             title: input.title,
+            category: input.category,
             description: input.description || null,
             currency: input.currency,
             deadline: input.deadline,

@@ -129,6 +129,7 @@ export const rfqs = pgTable(
 
     rfqNumber: text("rfq_number").notNull(),
     title: text("title").notNull(),
+    category: text("category").notNull(),
     description: text("description"),
     status: rfqStatusEnum("status").default("DRAFT").notNull(),
     deadline: timestamp("deadline", { withTimezone: true }).notNull(),

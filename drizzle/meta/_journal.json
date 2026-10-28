@@ -57,6 +57,13 @@
       "when": 1793168365393,
       "tag": "0007_graceful_union_jack",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793172101647,
+      "tag": "0008_rfq_categories",
+      "breakpoints": true
     }
   ]
 }
