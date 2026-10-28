@@ -25,12 +25,12 @@ export default async function NewRfqPage() {
 
   return (
     <AppShell activeItem="RFQs" user={authorization.user}>
-      <section className="min-w-0 flex-1 p-5 sm:p-7 lg:p-8">
+      <section className="w-full min-w-0 max-w-full p-5 sm:p-7 lg:p-8">
         <h1 className="text-2xl font-medium tracking-tight sm:text-3xl">
-          Create RFQ
+          Create RFQ&apos;s
         </h1>
         <p className="mt-2 text-sm text-[#c7c7c7] sm:text-base">
-          Define requirements and invite registered vendors to quote.
+          new request for quotation
         </p>
         <RfqForm vendors={vendorRows} />
       </section>

@@ -39,8 +39,8 @@ export function AppShell({ user, activeItem, children }: AppShellProps) {
   const avatarLetter = user.username.charAt(0).toUpperCase();
 
   return (
-    <main className="min-h-[100dvh] w-full overflow-x-hidden bg-[#111111] text-[#e8e8e8]">
-      <div className="flex min-h-[100dvh] w-full flex-col bg-[#111111]">
+    <main className="h-[100dvh] w-full min-w-0 bg-[#111111] text-[#e8e8e8]">
+      <div className="grid h-full min-h-0 min-w-0 grid-rows-[60px_minmax(0,1fr)] bg-[#111111]">
         <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#8a8a8a] bg-[#082820] px-4 sm:px-6">
           <Link
             className="text-sm font-medium tracking-tight text-[#f1f1f1] outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/60"
@@ -60,7 +60,7 @@ export function AppShell({ user, activeItem, children }: AppShellProps) {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col md:flex-row">
+        <div className="grid min-h-0 min-w-0 overflow-y-auto md:grid-cols-[14rem_minmax(0,1fr)] md:overflow-hidden">
           <aside className="border-b border-[#8a8a8a] p-3 md:w-56 md:shrink-0 md:border-r md:border-b-0 md:p-4">
             <nav aria-label="Primary navigation" className="grid grid-cols-2 gap-1 md:block">
               {navigationItems.map((item) => {
@@ -87,7 +87,7 @@ export function AppShell({ user, activeItem, children }: AppShellProps) {
             </nav>
           </aside>
 
-          {children}
+          <div className="w-full min-w-0 max-w-full md:min-h-0 md:overflow-y-auto">{children}</div>
         </div>
       </div>
     </main>
