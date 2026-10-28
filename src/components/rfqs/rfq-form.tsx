@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { upload } from "@imagekit/javascript";
 import type { ZodError } from "zod";
 import { DeadlinePicker } from "@/components/rfqs/deadline-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MAX_RFQ_ATTACHMENT_SIZE, validateAttachmentMetadata } from "@/lib/rfq-attachments";
 import { createRfqSchema, type CreateRfqInput } from "@/lib/validations/rfq";
 
 type VendorOption = {
@@ -85,12 +87,35 @@ function getRfqId(payload: unknown): string | undefined {
     : undefined;
 }
 
+type UploadAuthentication = {
+  token: string;
+  expire: number;
+  signature: string;
+  publicKey: string;
+  folder: string;
+  fileName: string;
+  checks: string;
+};
+
+function isUploadAuthentication(value: unknown): value is UploadAuthentication {
+  return typeof value === "object" && value !== null &&
+    "token" in value && typeof value.token === "string" &&
+    "expire" in value && typeof value.expire === "number" &&
+    "signature" in value && typeof value.signature === "string" &&
+    "publicKey" in value && typeof value.publicKey === "string" &&
+    "folder" in value && typeof value.folder === "string" &&
+    "fileName" in value && typeof value.fileName === "string" &&
+    "checks" in value && typeof value.checks === "string";
+}
+
 export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
   const router = useRouter();
   const [values, setValues] = useState<RfqFormValues>(initialValues);
   const [fieldErrors, setFieldErrors] = useState<RfqFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   function updateField(
     field: Exclude<keyof RfqFormValues, "lineItems" | "vendorIds">,
@@ -141,6 +166,68 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
     setFormError(null);
   }
 
+  function updateAttachments(files: FileList | null) {
+    const selectedFiles = Array.from(files ?? []);
+    const invalid = selectedFiles.map((file) => validateAttachmentMetadata({
+      filename: file.name,
+      mimeType: file.type,
+      size: file.size,
+    })).find(Boolean);
+
+    if (invalid) {
+      setAttachmentError(invalid);
+      return;
+    }
+
+    setAttachments(selectedFiles);
+    setAttachmentError(null);
+  }
+
+  async function uploadAttachment(rfqId: string, file: File): Promise<void> {
+    const authResponse = await fetch(`/api/rfqs/${rfqId}/attachments/upload-auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ filename: file.name, mimeType: file.type, size: file.size }),
+    });
+    const authPayload: unknown = await authResponse.json().catch(() => null);
+
+    if (!authResponse.ok || !isUploadAuthentication(authPayload)) {
+      throw new Error(getResponseMessage(authPayload) ?? "Could not authorize this attachment.");
+    }
+
+    const uploadResult = await upload({
+      file,
+      fileName: authPayload.fileName,
+      folder: authPayload.folder,
+      isPrivateFile: true,
+      useUniqueFileName: false,
+      overwriteFile: false,
+      checks: authPayload.checks,
+      token: authPayload.token,
+      expire: authPayload.expire,
+      signature: authPayload.signature,
+      publicKey: authPayload.publicKey,
+      responseFields: ["isPrivateFile"],
+    });
+
+    if (!uploadResult.fileId) {
+      throw new Error("ImageKit did not return an attachment reference.");
+    }
+
+    const attachmentResponse = await fetch(`/api/rfqs/${rfqId}/attachments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ fileId: uploadResult.fileId }),
+    });
+    const attachmentPayload: unknown = await attachmentResponse.json().catch(() => null);
+
+    if (!attachmentResponse.ok) {
+      throw new Error(getResponseMessage(attachmentPayload) ?? "Could not save this attachment.");
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -156,6 +243,15 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
 
     setFieldErrors({});
     setFormError(null);
+
+    const attachmentValidation = attachments
+      .map((file) => validateAttachmentMetadata({ filename: file.name, mimeType: file.type, size: file.size }))
+      .find(Boolean);
+    if (attachmentValidation) {
+      setAttachmentError(attachmentValidation);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -179,6 +275,16 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
 
       if (!rfqId) {
         setFormError("RFQ saved, but its details could not be opened.");
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        attachments.map((attachment) => uploadAttachment(rfqId, attachment)),
+      );
+      const failedUploads = results.filter((result) => result.status === "rejected");
+
+      if (failedUploads.length > 0) {
+        router.replace(`/rfqs/${rfqId}?attachmentUpload=partial`);
         return;
       }
 
@@ -255,6 +361,30 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
             value={values.deadline}
           />
           {fieldErrors.deadline ? <p className="mt-1 text-xs text-[#f19a9a]" id="deadline-error">{fieldErrors.deadline}</p> : null}
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label htmlFor="attachments">Attachments</Label>
+          <Input
+            accept=".pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg"
+            aria-describedby={attachmentError ? "attachments-error" : "attachments-help"}
+            aria-invalid={Boolean(attachmentError)}
+            className={`${inputClassName} py-2`}
+            disabled={isSubmitting}
+            id="attachments"
+            multiple
+            onChange={(event) => updateAttachments(event.target.files)}
+            type="file"
+          />
+          <p className="mt-1 text-xs text-[#b7b7b7]" id="attachments-help">
+            Optional. PDF, DOCX, XLSX, CSV, PNG, or JPG; up to {MAX_RFQ_ATTACHMENT_SIZE / 1024 / 1024} MB each.
+          </p>
+          {attachments.length > 0 ? (
+            <ul className="mt-2 space-y-1 text-sm text-[#d6d6d6]">
+              {attachments.map((attachment) => <li key={`${attachment.name}-${attachment.lastModified}`}>{attachment.name}</li>)}
+            </ul>
+          ) : null}
+          {attachmentError ? <p className="mt-1 text-xs text-[#f19a9a]" id="attachments-error">{attachmentError}</p> : null}
         </div>
       </div>
 

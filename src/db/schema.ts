@@ -190,6 +190,40 @@ export const rfqLineItems = pgTable(
   ],
 );
 
+export const rfqAttachments = pgTable(
+  "rfq_attachments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    rfqId: uuid("rfq_id")
+      .notNull()
+      .references(() => rfqs.id, { onDelete: "cascade" }),
+
+    uploaderUserId: uuid("uploader_user_id")
+      .notNull()
+      .references(() => users.id),
+
+    imagekitFileId: text("imagekit_file_id").notNull().unique(),
+    originalFilename: text("original_filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    size: integer("size").notNull(),
+    storagePath: text("storage_path").notNull().unique(),
+
+    createdAt: timestamp("created_at")
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("rfq_attachments_rfq_id_idx").on(table.rfqId),
+    index("rfq_attachments_uploader_user_id_idx").on(table.uploaderUserId),
+    check("rfq_attachments_size_positive", sql`${table.size} > 0`),
+  ],
+);
+
 export const rfqVendorAssignments = pgTable(
   "rfq_vendor_assignments",
   {

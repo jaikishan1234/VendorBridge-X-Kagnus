@@ -4,11 +4,12 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/db";
-import { rfqLineItems, rfqVendorAssignments, rfqs, vendors } from "@/db/schema";
+import { rfqAttachments, rfqLineItems, rfqVendorAssignments, rfqs, vendors } from "@/db/schema";
 import { getRfqViewer } from "@/lib/rfq-access";
 
 type RfqDetailPageProps = {
   params: Promise<{ rfqId: string }>;
+  searchParams?: Promise<{ attachmentUpload?: string }>;
 };
 
 function formatStatus(status: string) {
@@ -22,7 +23,7 @@ function formatDeadline(deadline: Date) {
   }).format(deadline);
 }
 
-export default async function RfqDetailPage({ params }: RfqDetailPageProps) {
+export default async function RfqDetailPage({ params, searchParams }: RfqDetailPageProps) {
   const viewer = await getRfqViewer();
 
   if (viewer.kind === "unauthenticated") {
@@ -96,6 +97,17 @@ export default async function RfqDetailPage({ params }: RfqDetailPageProps) {
           .where(eq(rfqVendorAssignments.rfqId, rfq.id))
           .orderBy(asc(vendors.vendorName))
       : [];
+  const attachments = await db
+    .select({
+      id: rfqAttachments.id,
+      originalFilename: rfqAttachments.originalFilename,
+      mimeType: rfqAttachments.mimeType,
+      size: rfqAttachments.size,
+    })
+    .from(rfqAttachments)
+    .where(eq(rfqAttachments.rfqId, rfq.id))
+    .orderBy(asc(rfqAttachments.createdAt));
+  const uploadWasPartial = (await searchParams)?.attachmentUpload === "partial";
 
   return (
     <AppShell activeItem="RFQs" user={viewer.user}>
@@ -121,6 +133,36 @@ export default async function RfqDetailPage({ params }: RfqDetailPageProps) {
             </p>
           ) : null}
         </header>
+
+        {uploadWasPartial ? (
+          <p className="mt-5 rounded-[5px] border border-[#b86d6d] bg-[#2a1717] p-3 text-sm text-[#f2bbbb]" role="alert">
+            The RFQ was created, but one or more attachments could not be added. The list below shows only attachments saved successfully.
+          </p>
+        ) : null}
+
+        <section aria-labelledby="attachments-heading" className="mt-9">
+          <h2 className="text-lg font-medium" id="attachments-heading">Attachments</h2>
+          {attachments.length === 0 ? (
+            <p className="mt-3 text-sm text-[#c7c7c7]">No attachments were added to this RFQ.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-[#454545] overflow-hidden rounded-[6px] border border-[#777777]">
+              {attachments.map((attachment) => (
+                <li className="flex items-center justify-between gap-4 p-4" key={attachment.id}>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-[#efefef]">{attachment.originalFilename}</p>
+                    <p className="mt-1 text-xs text-[#b7b7b7]">{attachment.mimeType} · {(attachment.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                  <a
+                    className="shrink-0 text-sm text-[#d6d6d6] underline-offset-4 hover:text-[#efefef] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
+                    href={`/api/rfqs/${rfq.id}/attachments/${attachment.id}/download`}
+                  >
+                    Download
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         <section aria-labelledby="line-items-heading" className="mt-9">
           <h2 className="text-lg font-medium" id="line-items-heading">

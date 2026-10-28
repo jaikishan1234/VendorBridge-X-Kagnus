@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
+    "@imagekit/javascript": "^5.5.1",
+    "@imagekit/nodejs": "^7.13.0",
     "@neondatabase/serverless": "^1.2.0",
     "argon2": "^0.45.1",
     "class-variance-authority": "^0.7.1",
