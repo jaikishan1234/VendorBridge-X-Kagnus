@@ -65,4 +65,41 @@ describe("GET attachment download", () => {
     expect(mocks.eq).toHaveBeenCalledWith(rfqVendorAssignments.vendorId, vendorId);
     expect(mocks.getClient).not.toHaveBeenCalled();
   });
+
+  it("issues a signed original-file URL for an authorized procurement user", async () => {
+    mocks.getRfqViewer.mockResolvedValue({
+      kind: "procurement",
+      user: { role: "PROCUREMENT_OFFICER" },
+    });
+    const storagePath = `/vendorbridge/rfqs/${rfqId}/attachment.png`;
+    const limit = vi.fn().mockResolvedValue([
+      { storagePath, originalFilename: "supplier's scope & quote.final.png" },
+    ]);
+    const where = vi.fn().mockReturnValue({ limit });
+    const from = vi.fn().mockReturnValue({ where });
+    mocks.select.mockReturnValue({ from });
+    const buildSrc = vi.fn().mockReturnValue(
+      "https://download.example.test/attachment.png?tr=orig-true&ik-t=1&ik-s=signature",
+    );
+    mocks.getClient.mockReturnValue({ helper: { buildSrc } });
+    mocks.getUrlEndpoint.mockReturnValue("https://ik.imagekit.io/test-endpoint");
+
+    const response = await GET(new Request("http://localhost/download"), context);
+
+    expect(response.status).toBe(307);
+    const location = new URL(response.headers.get("location")!);
+    expect(location.pathname).toBe("/attachment.png");
+    expect(location.searchParams.get("tr")).toBe("orig-true");
+    expect(location.searchParams.has("ik-attachment")).toBe(false);
+    expect(location.searchParams.has("ik-attachment-filename")).toBe(false);
+    expect(location.searchParams.has("ik-t")).toBe(true);
+    expect(location.searchParams.has("ik-s")).toBe(true);
+    expect(buildSrc).toHaveBeenCalledWith({
+      urlEndpoint: "https://ik.imagekit.io/test-endpoint",
+      src: storagePath,
+      transformation: [{ raw: "orig-true" }],
+      signed: true,
+      expiresIn: 60,
+    });
+  });
 });

@@ -1,6 +1,7 @@
 const maximumFilenameLength = 200;
 
 export const MAX_RFQ_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+export const IMAGEKIT_RFQ_ATTACHMENT_SIZE_CHECK = '"file.size" <= "10MB"';
 
 const allowedAttachmentTypes = {
   pdf: "application/pdf",

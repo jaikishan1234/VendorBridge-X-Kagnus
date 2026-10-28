@@ -5,7 +5,12 @@ import { z } from "zod";
 import { db } from "@/db";
 import { rfqs } from "@/db/schema";
 import { requireRole } from "@/lib/authorization";
-import { attachmentFolder, storageFilename, validateAttachmentMetadata } from "@/lib/rfq-attachments";
+import {
+  attachmentFolder,
+  IMAGEKIT_RFQ_ATTACHMENT_SIZE_CHECK,
+  storageFilename,
+  validateAttachmentMetadata,
+} from "@/lib/rfq-attachments";
 import { getImageKitClient, getImageKitPublicKey } from "@/lib/imagekit";
 
 const uploadRequestSchema = z.object({
@@ -68,7 +73,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       publicKey: getImageKitPublicKey(),
       folder: attachmentFolder(rfq.id),
       fileName: filename,
-      checks: "file.size < 10MB",
+      checks: IMAGEKIT_RFQ_ATTACHMENT_SIZE_CHECK,
     });
   } catch (error) {
     console.error("ImageKit upload authorization error:", error);

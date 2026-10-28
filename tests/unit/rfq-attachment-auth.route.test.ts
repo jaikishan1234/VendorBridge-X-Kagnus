@@ -82,7 +82,7 @@ describe("POST /api/rfqs/[rfqId]/attachments/upload-auth", () => {
       signature: "signature",
       publicKey: "public-key",
       folder: `/vendorbridge/rfqs/${rfqId}`,
-      checks: "file.size < 10MB",
+      checks: '"file.size" <= "10MB"',
     });
   });
 });

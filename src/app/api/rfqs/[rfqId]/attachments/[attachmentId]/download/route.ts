@@ -70,6 +70,7 @@ export async function GET(_request: Request, { params }: RouteContext) {
     const url = getImageKitClient().helper.buildSrc({
       urlEndpoint: getImageKitUrlEndpoint(),
       src: attachment.storagePath,
+      transformation: [{ raw: "orig-true" }],
       signed: true,
       expiresIn: 60,
     });

@@ -1,6 +1,11 @@
 "use client";
 
-import { upload } from "@imagekit/javascript";
+import {
+  ImageKitInvalidRequestError,
+  ImageKitServerError,
+  ImageKitUploadNetworkError,
+  upload,
+} from "@imagekit/javascript";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type DragEvent, type FormEvent } from "react";
@@ -101,6 +106,35 @@ type UploadAuthentication = {
   fileName: string;
   checks: string;
 };
+
+type AttachmentUploadStage = "authorization" | "storage" | "finalization";
+
+class AttachmentUploadError extends Error {
+  constructor(
+    readonly stage: AttachmentUploadStage,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AttachmentUploadError";
+  }
+}
+
+function getSanitizedImageKitUploadMessage(error: unknown): string {
+  if (error instanceof ImageKitInvalidRequestError) {
+    return "ImageKit rejected the upload request.";
+  }
+
+  if (error instanceof ImageKitUploadNetworkError) {
+    return "ImageKit upload network request failed.";
+  }
+
+  if (error instanceof ImageKitServerError) {
+    return "ImageKit upload service returned an error.";
+  }
+
+  return "ImageKit upload failed unexpectedly.";
+}
+
 function isUploadAuthentication(value: unknown): value is UploadAuthentication {
   return (
     typeof value === "object" &&
@@ -229,9 +263,9 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
     );
     const authPayload: unknown = await authResponse.json().catch(() => null);
     if (!authResponse.ok || !isUploadAuthentication(authPayload))
-      throw new Error(
-        getResponseMessage(authPayload) ??
-          "Could not authorize this attachment.",
+      throw new AttachmentUploadError(
+        "authorization",
+        `Attachment upload authorization returned ${authResponse.status}.`,
       );
     const uploadResult = await upload({
       file,
@@ -246,22 +280,27 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
       signature: authPayload.signature,
       publicKey: authPayload.publicKey,
       responseFields: ["isPrivateFile"],
+    }).catch((error: unknown) => {
+      throw new AttachmentUploadError(
+        "storage",
+        getSanitizedImageKitUploadMessage(error),
+      );
     });
     if (!uploadResult.fileId)
-      throw new Error("ImageKit did not return an attachment reference.");
+      throw new AttachmentUploadError(
+        "storage",
+        "ImageKit did not return an attachment reference.",
+      );
     const attachmentResponse = await fetch(`/api/rfqs/${rfqId}/attachments`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ fileId: uploadResult.fileId }),
     });
-    const attachmentPayload: unknown = await attachmentResponse
-      .json()
-      .catch(() => null);
     if (!attachmentResponse.ok)
-      throw new Error(
-        getResponseMessage(attachmentPayload) ??
-          "Could not save this attachment.",
+      throw new AttachmentUploadError(
+        "finalization",
+        `Attachment finalization returned ${attachmentResponse.status}.`,
       );
   }
 
@@ -313,7 +352,18 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
       const results = await Promise.allSettled(
         attachments.map((attachment) => uploadAttachment(rfqId, attachment)),
       );
-      if (results.some((result) => result.status === "rejected")) {
+      const failedUploads = results.filter(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (failedUploads.length > 0) {
+        console.error(
+          "RFQ attachment upload failed.",
+          failedUploads.map((result) =>
+            result.reason instanceof AttachmentUploadError
+              ? { stage: result.reason.stage, message: result.reason.message }
+              : { stage: "unknown", message: "Attachment upload failed unexpectedly." },
+          ),
+        );
         router.replace(`/rfqs/${rfqId}?attachmentUpload=partial`);
         return;
       }
