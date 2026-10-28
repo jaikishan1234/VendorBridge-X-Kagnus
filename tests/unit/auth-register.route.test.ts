@@ -136,6 +136,25 @@ describe("POST /api/auth/register", () => {
     expect(JSON.stringify(body)).not.toContain(passwordHash);
   });
 
+  it("always creates a VENDOR when a client supplies a privileged role", async () => {
+    mockExistingUserLookup([]);
+    mockUserInsert();
+    mocks.hashPassword.mockResolvedValue("argon2id-generated-hash");
+
+    const response = await POST(
+      registrationRequest(JSON.stringify({
+        ...validRegistration,
+        role: "PROCUREMENT_OFFICER",
+      })),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "VENDOR" }),
+    );
+    expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("role", "PROCUREMENT_OFFICER");
+  });
+
   it("returns a generic error without exposing an internal failure", async () => {
     const internalDetail = "database password: should-not-be-disclosed";
     mocks.select.mockImplementation(() => {

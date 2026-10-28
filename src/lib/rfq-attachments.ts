@@ -72,3 +72,20 @@ export function originalFilenameFromStorageName(storageName: string): string | u
   const filename = storageName.slice(separator + 2);
   return filename && filename.length <= maximumFilenameLength ? filename : undefined;
 }
+
+function encodeContentDispositionFilename(filename: string): string {
+  return encodeURIComponent(filename).replace(/['()*]/g, (character) =>
+    `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
+export function attachmentContentDisposition(originalFilename: string): string {
+  const filename = originalFilename.trim() || "attachment";
+  const fallbackFilename = filename
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "_")
+    .replace(/["\\/]/g, "_")
+    .trim() || "attachment";
+
+  return `attachment; filename="${fallbackFilename}"; filename*=UTF-8''${encodeContentDispositionFilename(filename)}`;
+}

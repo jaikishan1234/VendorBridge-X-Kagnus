@@ -23,3 +23,28 @@ export function getImageKitPublicKey() {
 export function getImageKitUrlEndpoint() {
   return requireImageKitSetting("IMAGEKIT_URL_ENDPOINT");
 }
+
+export function isImageKitDeliveryUrl(url: string, urlEndpoint: string): boolean {
+  try {
+    const deliveryUrl = new URL(url);
+    const endpointUrl = new URL(urlEndpoint);
+    const endpointPath = endpointUrl.pathname.endsWith("/")
+      ? endpointUrl.pathname
+      : `${endpointUrl.pathname}/`;
+
+    return (
+      deliveryUrl.protocol === "https:" &&
+      endpointUrl.protocol === "https:" &&
+      deliveryUrl.origin === endpointUrl.origin &&
+      !deliveryUrl.username &&
+      !deliveryUrl.password &&
+      !endpointUrl.username &&
+      !endpointUrl.password &&
+      !endpointUrl.search &&
+      !endpointUrl.hash &&
+      deliveryUrl.pathname.startsWith(endpointPath)
+    );
+  } catch {
+    return false;
+  }
+}

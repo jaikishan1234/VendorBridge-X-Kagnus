@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { MAX_RFQ_ATTACHMENT_SIZE, validateAttachmentMetadata } from "@/lib/rfq-attachments";
+import {
+  attachmentContentDisposition,
+  MAX_RFQ_ATTACHMENT_SIZE,
+  validateAttachmentMetadata,
+} from "@/lib/rfq-attachments";
 
 describe("RFQ attachment validation", () => {
   it("accepts the supported types only when their extension and MIME type agree", () => {
@@ -22,5 +26,14 @@ describe("RFQ attachment validation", () => {
       mimeType: "text/csv",
       size: MAX_RFQ_ATTACHMENT_SIZE + 1,
     })).toBe("Each attachment must be 10 MB or smaller.");
+  });
+
+  it("uses a safe RFC 5987 filename for attachment responses", () => {
+    expect(attachmentContentDisposition("supplier's scope & quote.final.png")).toBe(
+      "attachment; filename=\"supplier's scope & quote.final.png\"; filename*=UTF-8''supplier%27s%20scope%20%26%20quote.final.png",
+    );
+    expect(attachmentContentDisposition('report\"\r\n.pdf')).toBe(
+      "attachment; filename=\"report___.pdf\"; filename*=UTF-8''report%22%0D%0A.pdf",
+    );
   });
 });
