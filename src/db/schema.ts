@@ -264,6 +264,9 @@ export const quotations = pgTable(
     vendorId: uuid("vendor_id").notNull(),
     status: quotationStatusEnum("status").default("DRAFT").notNull(),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    // Optional while drafting; vendors may provide either or both when ready.
+    deliveryTimeline: text("delivery_timeline"),
+    notes: text("notes"),
 
     createdAt: timestamp("created_at")
       .defaultNow()

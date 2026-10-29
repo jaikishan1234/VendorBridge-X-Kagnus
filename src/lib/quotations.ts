@@ -21,6 +21,8 @@ export async function getCurrentVendorQuotation(access: AuthorizedVendorRfq) {
       id: quotations.id,
       status: quotations.status,
       submittedAt: quotations.submittedAt,
+      deliveryTimeline: quotations.deliveryTimeline,
+      notes: quotations.notes,
       createdAt: quotations.createdAt,
       updatedAt: quotations.updatedAt,
     })
@@ -153,7 +155,11 @@ async function persistDraft(
 
     const [lockedQuotation] = await tx
       .update(quotations)
-      .set({ updatedAt: new Date() })
+      .set({
+        deliveryTimeline: input.deliveryTimeline || null,
+        notes: input.notes || null,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(quotations.id, quotation.id),

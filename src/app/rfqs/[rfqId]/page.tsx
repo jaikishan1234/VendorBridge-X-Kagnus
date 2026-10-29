@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { AppShell } from "@/components/app-shell";
 import { PublishRfqButton } from "@/components/rfqs/publish-rfq-button";
+import { VendorQuotationForm } from "@/components/rfqs/vendor-quotation-form";
 import { db } from "@/db";
 import { rfqAttachments, rfqLineItems, rfqVendorAssignments, rfqs, vendors } from "@/db/schema";
 import { getRfqViewer } from "@/lib/rfq-access";
@@ -204,6 +205,21 @@ export default async function RfqDetailPage({ params, searchParams }: RfqDetailP
             </table>
           </div>
         </section>
+
+        {viewer.kind === "vendor" && rfq.status === "OPEN" ? (
+          <VendorQuotationForm
+            currency={rfq.currency}
+            deadline={rfq.deadline.toISOString()}
+            lineItems={lineItems.map((lineItem) => ({
+              id: lineItem.id,
+              lineNumber: lineItem.lineNumber,
+              description: lineItem.description,
+              quantity: lineItem.quantity,
+              unit: lineItem.unit,
+            }))}
+            rfqId={rfq.id}
+          />
+        ) : null}
 
         {viewer.kind === "procurement" ? (
           <section aria-labelledby="vendors-heading" className="mt-9">

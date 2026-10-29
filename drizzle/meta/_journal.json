@@ -64,6 +64,13 @@
       "when": 1793172101647,
       "tag": "0008_rfq_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793255674947,
+      "tag": "0009_quotation_delivery_and_notes",
+      "breakpoints": true
     }
   ]
 }

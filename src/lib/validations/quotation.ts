@@ -35,7 +35,12 @@ const quotationLineItemsSchema = z
     });
   });
 
-export const quotationDraftSchema = z.object({
+const quotationHeaderSchema = z.object({
+  deliveryTimeline: z.string().trim().max(500, "Delivery timeline must be 500 characters or fewer.").optional(),
+  notes: z.string().trim().max(5_000, "Notes must be 5,000 characters or fewer.").optional(),
+});
+
+export const quotationDraftSchema = quotationHeaderSchema.extend({
   lineItems: quotationLineItemsSchema,
 }).strict();
 

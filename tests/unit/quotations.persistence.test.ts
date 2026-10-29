@@ -130,6 +130,26 @@ describe("quotation persistence lifecycle boundary", () => {
     expect(mocks.lineItemValues).toHaveBeenCalledWith([
       expect.objectContaining({ quotationId, rfqId, rfqLineItemId: lineItemId, unitPrice: "25.00" }),
     ]);
+    expect(mocks.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ deliveryTimeline: null, notes: null }),
+    );
+  });
+
+  it("persists optional delivery timeline and notes with the draft header", async () => {
+    configureTransaction();
+
+    await saveVendorQuotationDraft(access, {
+      deliveryTimeline: "Within 10 business days",
+      notes: "Includes delivery and installation.",
+      lineItems,
+    });
+
+    expect(mocks.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deliveryTimeline: "Within 10 business days",
+        notes: "Includes delivery and installation.",
+      }),
+    );
   });
 
   it("rejects a draft when the RFQ changed from OPEN before the write transaction acquired its lock", async () => {

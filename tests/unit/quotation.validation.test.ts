@@ -39,4 +39,21 @@ describe("quotation validation", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("accepts optional delivery details and bounds their length", () => {
+    expect(
+      quotationDraftSchema.safeParse({
+        deliveryTimeline: "Within 10 business days",
+        notes: "Includes delivery and installation.",
+        lineItems: [{ rfqLineItemId: lineItemId, unitPrice: "10.00" }],
+      }).success,
+    ).toBe(true);
+    expect(
+      quotationDraftSchema.safeParse({
+        deliveryTimeline: "x".repeat(501),
+        notes: "x".repeat(5_001),
+        lineItems: [{ rfqLineItemId: lineItemId, unitPrice: "10.00" }],
+      }).success,
+    ).toBe(false);
+  });
 });

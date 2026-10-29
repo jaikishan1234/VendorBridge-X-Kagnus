@@ -137,6 +137,21 @@ describe("vendor quotation routes", () => {
     });
   });
 
+  it("forwards delivery timeline and notes through the authenticated draft endpoint", async () => {
+    mocks.getVendorQuotationAccess.mockResolvedValue(access);
+    mocks.saveVendorQuotationDraft.mockResolvedValue({ id: "d1111111-1111-4111-8111-111111111111", status: "DRAFT" });
+    const quotationDraft = {
+      ...draft,
+      deliveryTimeline: "Within 10 business days",
+      notes: "Includes delivery and installation.",
+    };
+
+    const response = await saveDraft(request("POST", quotationDraft), context());
+
+    expect(response.status).toBe(200);
+    expect(mocks.saveVendorQuotationDraft).toHaveBeenCalledWith(access, quotationDraft);
+  });
+
   it("maps an invalid cross-RFQ line item to a client error", async () => {
     mocks.getVendorQuotationAccess.mockResolvedValue(access);
     mocks.saveVendorQuotationDraft.mockRejectedValue(new mocks.InvalidQuotationLineItemsError());
