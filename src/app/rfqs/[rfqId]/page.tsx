@@ -141,6 +141,14 @@ export default async function RfqDetailPage({ params, searchParams }: RfqDetailP
           {viewer.kind === "procurement" && rfq.status === "DRAFT" ? (
             <PublishRfqButton rfqId={rfq.id} />
           ) : null}
+          {viewer.kind === "procurement" ? (
+            <Link
+              className="mt-5 inline-flex h-9 items-center rounded-[4px] border border-[#8a8a8a] px-4 text-sm text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
+              href={`/rfqs/${rfq.id}/quotations`}
+            >
+              Compare Quotations
+            </Link>
+          ) : null}
         </header>
 
         {uploadWasPartial ? (

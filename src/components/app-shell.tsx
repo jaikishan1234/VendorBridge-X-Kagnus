@@ -11,7 +11,7 @@ type AppShellUser = {
 
 type AppShellProps = {
   user: AppShellUser;
-  activeItem: "Dashboard" | "Vendors" | "RFQs";
+  activeItem: "Dashboard" | "Vendors" | "RFQs" | "Quotations";
   children: ReactNode;
 };
 
@@ -31,12 +31,17 @@ function navigationHref(item: string) {
   if (item === "Dashboard") return "/dashboard";
   if (item === "Vendors") return "/vendors";
   if (item === "RFQs") return "/rfqs";
+  if (item === "Quotations") return "/quotations";
 
   return `/dashboard?comingSoon=${encodeURIComponent(item)}`;
 }
 
 export function AppShell({ user, activeItem, children }: AppShellProps) {
   const avatarLetter = user.username.charAt(0).toUpperCase();
+  const visibleNavigationItems =
+    user.role === "PROCUREMENT_OFFICER"
+      ? navigationItems
+      : navigationItems.filter((item) => item !== "Quotations");
 
   return (
     <main className="h-[100dvh] w-full min-w-0 bg-[#111111] text-[#e8e8e8]">
@@ -63,7 +68,7 @@ export function AppShell({ user, activeItem, children }: AppShellProps) {
         <div className="grid min-h-0 min-w-0 overflow-y-auto md:grid-cols-[14rem_minmax(0,1fr)] md:overflow-hidden">
           <aside className="border-b border-[#8a8a8a] p-3 md:w-56 md:shrink-0 md:border-r md:border-b-0 md:p-4">
             <nav aria-label="Primary navigation" className="grid grid-cols-2 gap-1 md:block">
-              {navigationItems.map((item) => {
+              {visibleNavigationItems.map((item) => {
                 const isActive = item === activeItem;
 
                 return (
