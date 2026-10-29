@@ -27,21 +27,30 @@ const navigationItems = [
   "Activity",
 ];
 
-function navigationHref(item: string) {
+export function navigationHref(item: string, role: UserRole) {
   if (item === "Dashboard") return "/dashboard";
   if (item === "Vendors") return "/vendors";
   if (item === "RFQs") return "/rfqs";
-  if (item === "Quotations") return "/quotations";
+  if (item === "Quotations") return role === "VENDOR" ? "/my-quotations" : "/quotations";
 
   return `/dashboard?comingSoon=${encodeURIComponent(item)}`;
 }
 
+export function navigationLabel(item: string, role: UserRole) {
+  return item === "Quotations" && role === "VENDOR" ? "My Quotations" : item;
+}
+
+export function navigationItemsForRole(role: UserRole) {
+  if (role === "PROCUREMENT_OFFICER" || role === "VENDOR") {
+    return navigationItems;
+  }
+
+  return navigationItems.filter((item) => item !== "Quotations");
+}
+
 export function AppShell({ user, activeItem, children }: AppShellProps) {
   const avatarLetter = user.username.charAt(0).toUpperCase();
-  const visibleNavigationItems =
-    user.role === "PROCUREMENT_OFFICER"
-      ? navigationItems
-      : navigationItems.filter((item) => item !== "Quotations");
+  const visibleNavigationItems = navigationItemsForRole(user.role);
 
   return (
     <main className="h-[100dvh] w-full min-w-0 bg-[#111111] text-[#e8e8e8]">
@@ -79,13 +88,13 @@ export function AppShell({ user, activeItem, children }: AppShellProps) {
                         ? "bg-[#087020] text-[#f2f2f2]"
                         : "text-[#d6d6d6] hover:bg-[#252525]"
                     }`}
-                    href={navigationHref(item)}
+                    href={navigationHref(item, user.role)}
                     key={item}
                   >
                     <span aria-hidden="true" className="mr-2 text-[#b7b7b7]">
                       -
                     </span>
-                    {item}
+                    {navigationLabel(item, user.role)}
                   </Link>
                 );
               })}

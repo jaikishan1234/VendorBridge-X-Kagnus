@@ -67,6 +67,23 @@ function decimalToScaledInteger(value: string, scale: number): bigint {
   return BigInt(`${whole}${fraction}`);
 }
 
+export function calculateComparableTotal(
+  lineItems: Array<{ quantity: string; unitPrice: string }>,
+) {
+  const totalAtFiveDecimalPlaces = lineItems.reduce(
+    (total, lineItem) =>
+      total +
+      decimalToScaledInteger(lineItem.quantity, 3) *
+        decimalToScaledInteger(lineItem.unitPrice, 2),
+    BigInt(0),
+  );
+
+  return {
+    total: formatMoney(totalAtFiveDecimalPlaces),
+    totalMinor: totalAtFiveDecimalPlaces.toString(),
+  };
+}
+
 function formatMoney(totalAtFiveDecimalPlaces: bigint): string {
   // Quantities have scale 3 and unit prices scale 2. Round the product total
   // half-up to the RFQ currency's conventional two decimal places.
@@ -120,17 +137,18 @@ export function buildQuotationComparison(
 
     if (!isComparable) return quotation;
 
-    const totalAtFiveDecimalPlaces = quotation.lineItems.reduce((total, lineItem) => {
-      const quantity = quantitiesById.get(lineItem.rfqLineItemId);
-      if (!quantity) return total;
-      return total + decimalToScaledInteger(quantity, 3) * decimalToScaledInteger(lineItem.unitPrice, 2);
-    }, BigInt(0));
+    const total = calculateComparableTotal(
+      quotation.lineItems.map((lineItem) => ({
+        quantity: quantitiesById.get(lineItem.rfqLineItemId) ?? "0",
+        unitPrice: lineItem.unitPrice,
+      })),
+    );
 
     return {
       ...quotation,
       isComparable: true,
-      total: formatMoney(totalAtFiveDecimalPlaces),
-      totalMinor: totalAtFiveDecimalPlaces.toString(),
+      total: total.total,
+      totalMinor: total.totalMinor,
     };
   });
 
