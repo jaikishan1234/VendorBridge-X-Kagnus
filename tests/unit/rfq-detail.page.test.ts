@@ -77,6 +77,7 @@ describe("/rfqs/[rfqId] page", () => {
       rfqVendorAssignments.vendorId,
       vendorViewer.vendorId,
     );
+    expect(mocks.eq).toHaveBeenCalledWith(rfqs.status, "OPEN");
     expect(mocks.notFound).toHaveBeenCalledOnce();
   });
 });

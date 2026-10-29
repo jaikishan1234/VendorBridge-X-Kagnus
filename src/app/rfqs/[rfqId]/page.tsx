@@ -3,13 +3,14 @@ import { and, asc, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { AppShell } from "@/components/app-shell";
+import { PublishRfqButton } from "@/components/rfqs/publish-rfq-button";
 import { db } from "@/db";
 import { rfqAttachments, rfqLineItems, rfqVendorAssignments, rfqs, vendors } from "@/db/schema";
 import { getRfqViewer } from "@/lib/rfq-access";
 
 type RfqDetailPageProps = {
   params: Promise<{ rfqId: string }>;
-  searchParams?: Promise<{ attachmentUpload?: string }>;
+  searchParams?: Promise<{ attachmentUpload?: string; publication?: string }>;
 };
 
 function formatStatus(status: string) {
@@ -69,6 +70,7 @@ export default async function RfqDetailPage({ params, searchParams }: RfqDetailP
             and(
               eq(rfqs.id, rfqId),
               eq(rfqVendorAssignments.vendorId, viewer.vendorId),
+              eq(rfqs.status, "OPEN"),
             ),
           )
           .limit(1);
@@ -109,6 +111,7 @@ export default async function RfqDetailPage({ params, searchParams }: RfqDetailP
     .where(eq(rfqAttachments.rfqId, rfq.id))
     .orderBy(asc(rfqAttachments.createdAt));
   const uploadWasPartial = (await searchParams)?.attachmentUpload === "partial";
+  const publicationFailed = (await searchParams)?.publication === "failed";
 
   return (
     <AppShell activeItem="RFQs" user={viewer.user}>
@@ -134,11 +137,19 @@ export default async function RfqDetailPage({ params, searchParams }: RfqDetailP
               {rfq.description}
             </p>
           ) : null}
+          {viewer.kind === "procurement" && rfq.status === "DRAFT" ? (
+            <PublishRfqButton rfqId={rfq.id} />
+          ) : null}
         </header>
 
         {uploadWasPartial ? (
           <p className="mt-5 rounded-[5px] border border-[#b86d6d] bg-[#2a1717] p-3 text-sm text-[#f2bbbb]" role="alert">
             The RFQ was created, but one or more attachments could not be added. The list below shows only attachments saved successfully.
+          </p>
+        ) : null}
+        {publicationFailed ? (
+          <p className="mt-5 rounded-[5px] border border-[#b86d6d] bg-[#2a1717] p-3 text-sm text-[#f2bbbb]" role="alert">
+            The RFQ was saved as a draft but could not be published. Review its details and try publishing again.
           </p>
         ) : null}
 

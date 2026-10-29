@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { rfqAttachments, rfqVendorAssignments } from "@/db/schema";
+import { rfqAttachments, rfqVendorAssignments, rfqs } from "@/db/schema";
 import {
   getImageKitClient,
   getImageKitUrlEndpoint,
@@ -59,11 +59,13 @@ export async function GET(request: Request, { params }: RouteContext) {
             rfqVendorAssignments,
             eq(rfqVendorAssignments.rfqId, rfqAttachments.rfqId),
           )
+          .innerJoin(rfqs, eq(rfqs.id, rfqAttachments.rfqId))
           .where(
             and(
               eq(rfqAttachments.id, attachmentId),
               eq(rfqAttachments.rfqId, rfqId),
               eq(rfqVendorAssignments.vendorId, viewer.vendorId),
+              eq(rfqs.status, "OPEN"),
             ),
           )
           .limit(1);

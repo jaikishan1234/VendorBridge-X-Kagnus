@@ -20,7 +20,7 @@ vi.mock("@/lib/imagekit", () => ({
 }));
 
 import { GET } from "@/app/api/rfqs/[rfqId]/attachments/[attachmentId]/download/route";
-import { rfqAttachments, rfqVendorAssignments } from "@/db/schema";
+import { rfqAttachments, rfqVendorAssignments, rfqs } from "@/db/schema";
 
 const rfqId = "c1111111-1111-4111-8111-111111111111";
 const attachmentId = "d1111111-1111-4111-8111-111111111111";
@@ -57,7 +57,8 @@ describe("GET attachment download", () => {
     });
     const limit = vi.fn().mockResolvedValue([]);
     const where = vi.fn().mockReturnValue({ limit });
-    const innerJoin = vi.fn().mockReturnValue({ where });
+    const rfqInnerJoin = vi.fn().mockReturnValue({ where });
+    const innerJoin = vi.fn().mockReturnValue({ innerJoin: rfqInnerJoin });
     const from = vi.fn().mockReturnValue({ innerJoin });
     mocks.select.mockReturnValue({ from });
 
@@ -67,6 +68,10 @@ describe("GET attachment download", () => {
     expect(innerJoin).toHaveBeenCalledWith(
       rfqVendorAssignments,
       expect.objectContaining({ left: rfqVendorAssignments.rfqId, right: rfqAttachments.rfqId }),
+    );
+    expect(rfqInnerJoin).toHaveBeenCalledWith(
+      rfqs,
+      expect.objectContaining({ left: rfqs.id, right: rfqAttachments.rfqId }),
     );
     expect(mocks.eq).toHaveBeenCalledWith(rfqVendorAssignments.vendorId, vendorId);
     expect(mocks.getClient).not.toHaveBeenCalled();

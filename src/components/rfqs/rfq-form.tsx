@@ -108,6 +108,7 @@ type UploadAuthentication = {
 };
 
 type AttachmentUploadStage = "authorization" | "storage" | "finalization";
+type SubmissionIntent = "draft" | "publish";
 
 class AttachmentUploadError extends Error {
   constructor(
@@ -162,6 +163,7 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
   const [fieldErrors, setFieldErrors] = useState<RfqFieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionIntent, setSubmissionIntent] = useState<SubmissionIntent>("draft");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [showVendorPicker, setShowVendorPicker] = useState(false);
@@ -307,6 +309,11 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (isSubmitting) return;
+    const submitter = (event.nativeEvent as SubmitEvent).submitter;
+    const intent: SubmissionIntent =
+      submitter instanceof HTMLButtonElement && submitter.value === "publish"
+        ? "publish"
+        : "draft";
     const result = createRfqSchema.safeParse(values);
     if (!result.success) {
       setFieldErrors(getFieldErrors(result.error));
@@ -329,6 +336,7 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
       return;
     }
     setIsSubmitting(true);
+    setSubmissionIntent(intent);
     try {
       const response = await fetch("/api/rfqs", {
         method: "POST",
@@ -366,6 +374,16 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
         );
         router.replace(`/rfqs/${rfqId}?attachmentUpload=partial`);
         return;
+      }
+      if (intent === "publish") {
+        const publishResponse = await fetch(`/api/rfqs/${rfqId}/publish`, {
+          method: "POST",
+          credentials: "same-origin",
+        });
+        if (!publishResponse.ok) {
+          router.replace(`/rfqs/${rfqId}?publication=failed`);
+          return;
+        }
       }
       router.replace(`/rfqs/${rfqId}`);
     } catch {
@@ -700,22 +718,22 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
               <Button
                 className="h-9 rounded-[4px] border-[#e0e0e0] bg-[#ededed] px-4 text-sm text-[#171717] hover:bg-white"
                 disabled={isSubmitting || vendors.length === 0}
+                name="intent"
                 type="submit"
+                value="draft"
               >
-                {isSubmitting ? "Saving..." : "Save as Draft"}
+                {isSubmitting && submissionIntent === "draft" ? "Saving..." : "Save as Draft"}
               </Button>
               <Button
-                aria-describedby="send-unavailable"
                 className="h-9 rounded-[4px] px-4 text-sm"
-                disabled
-                type="button"
+                disabled={isSubmitting || vendors.length === 0}
+                name="intent"
+                type="submit"
+                value="publish"
                 variant="outline"
               >
-                Save &amp; Send to Vendors
+                {isSubmitting && submissionIntent === "publish" ? "Publishing..." : "Publish RFQ"}
               </Button>
-              <span className="sr-only" id="send-unavailable">
-                Sending RFQs and vendor notifications are not implemented yet.
-              </span>
               <Link
                 className="text-sm text-[#c7c7c7] underline-offset-4 hover:text-[#efefef] hover:underline"
                 href="/rfqs"
@@ -723,6 +741,9 @@ export function RfqForm({ vendors }: { vendors: VendorOption[] }) {
                 Cancel
               </Link>
             </div>
+            <p className="mt-3 text-xs text-[#a8a8a8]">
+              Publishing makes the RFQ available to assigned vendors. Vendor notifications are not sent automatically.
+            </p>
           </div>
           <div className="min-w-0">
             <Label className="sr-only" htmlFor="attachments">

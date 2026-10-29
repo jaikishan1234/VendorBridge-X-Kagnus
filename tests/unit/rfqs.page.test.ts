@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getRfqViewer: vi.fn(),
   select: vi.fn(),
+  and: vi.fn(),
   eq: vi.fn(),
   desc: vi.fn(),
 }));
 
 vi.mock("@/lib/rfq-access", () => ({ getRfqViewer: mocks.getRfqViewer }));
 vi.mock("@/db", () => ({ db: { select: mocks.select } }));
-vi.mock("drizzle-orm", () => ({ eq: mocks.eq, desc: mocks.desc }));
+vi.mock("drizzle-orm", () => ({ and: mocks.and, eq: mocks.eq, desc: mocks.desc }));
 vi.mock("next/link", () => ({ default: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("@/components/app-shell", () => ({ AppShell: ({ children }: { children: React.ReactNode }) => children }));
 
@@ -30,6 +31,7 @@ const vendorViewer = {
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.eq.mockImplementation((left, right) => ({ left, right }));
+  mocks.and.mockImplementation((...conditions) => ({ conditions }));
   mocks.desc.mockImplementation((column) => column);
 });
 
@@ -38,7 +40,7 @@ afterEach(() => {
 });
 
 describe("/rfqs page", () => {
-  it("lists a vendor's RFQs through its assignment records only", async () => {
+  it("lists only OPEN RFQs through the vendor's assignment records", async () => {
     mocks.getRfqViewer.mockResolvedValue(vendorViewer);
     const orderBy = vi.fn().mockResolvedValue([]);
     const where = vi.fn().mockReturnValue({ orderBy });
@@ -63,6 +65,7 @@ describe("/rfqs page", () => {
       rfqVendorAssignments.vendorId,
       vendorViewer.vendorId,
     );
+    expect(mocks.eq).toHaveBeenCalledWith(rfqs.status, "OPEN");
   });
 
   it("shows an unlinked vendor a safe state without querying RFQs", async () => {

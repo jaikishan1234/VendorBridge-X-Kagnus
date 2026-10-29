@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { db } from "@/db";
@@ -45,7 +45,12 @@ export default async function RfqsPage() {
             .select(rfqSelection)
             .from(rfqVendorAssignments)
             .innerJoin(rfqs, eq(rfqVendorAssignments.rfqId, rfqs.id))
-            .where(eq(rfqVendorAssignments.vendorId, viewer.vendorId))
+            .where(
+              and(
+                eq(rfqVendorAssignments.vendorId, viewer.vendorId),
+                eq(rfqs.status, "OPEN"),
+              ),
+            )
             .orderBy(desc(rfqs.createdAt))
         : [];
   const isProcurement = viewer.kind === "procurement";
