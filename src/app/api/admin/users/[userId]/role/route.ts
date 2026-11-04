@@ -5,9 +5,9 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { requireRole } from "@/lib/authorization";
 
-const procurementOfficerPromotionSchema = z
+const rolePromotionSchema = z
   .object({
-    role: z.literal("PROCUREMENT_OFFICER"),
+    role: z.enum(["PROCUREMENT_OFFICER", "MANAGER"]),
   })
   .strict();
 
@@ -31,6 +31,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       return NextResponse.json({ message: "User not found." }, { status: 404 });
     }
 
+    if (authorization.user.id === userId) {
+      return NextResponse.json(
+        { message: "You cannot change your own role." },
+        { status: 400 },
+      );
+    }
+
     let body: unknown;
     try {
       body = await request.json();
@@ -41,16 +48,17 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       );
     }
 
-    if (!procurementOfficerPromotionSchema.safeParse(body).success) {
+    const result = rolePromotionSchema.safeParse(body);
+    if (!result.success) {
       return NextResponse.json(
-        { message: "Only promotion to PROCUREMENT_OFFICER is supported." },
+        { message: "Only promotion to PROCUREMENT_OFFICER or MANAGER is supported." },
         { status: 400 },
       );
     }
 
     const [user] = await db
       .update(users)
-      .set({ role: "PROCUREMENT_OFFICER", updatedAt: new Date() })
+      .set({ role: result.data.role, updatedAt: new Date() })
       .where(eq(users.id, userId))
       .returning({
         id: users.id,
@@ -64,7 +72,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
 
     return NextResponse.json({
-      message: "User promoted to procurement officer.",
+      message: `User promoted to ${user.role === "MANAGER" ? "manager" : "procurement officer"}.`,
       user,
     });
   } catch (error) {

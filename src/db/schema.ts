@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
@@ -39,6 +40,18 @@ export const rfqStatusEnum = pgEnum("rfq_status", [
 export const quotationStatusEnum = pgEnum("quotation_status", [
   "DRAFT",
   "SUBMITTED",
+]);
+
+export const approvalStatusEnum = pgEnum("approval_status", [
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+]);
+
+export const approvalHistoryActionEnum = pgEnum("approval_history_action", [
+  "SUBMITTED",
+  "APPROVED",
+  "REJECTED",
 ]);
 
 export const users = pgTable("users", {
@@ -279,12 +292,89 @@ export const quotations = pgTable(
   (table) => [
     unique("quotations_rfq_vendor_unique").on(table.rfqId, table.vendorId),
     unique("quotations_id_rfq_unique").on(table.id, table.rfqId),
+    unique("quotations_id_rfq_vendor_unique").on(
+      table.id,
+      table.rfqId,
+      table.vendorId,
+    ),
     foreignKey({
       name: "quotations_rfq_vendor_assignment_fk",
       columns: [table.rfqId, table.vendorId],
       foreignColumns: [rfqVendorAssignments.rfqId, rfqVendorAssignments.vendorId],
     }),
     index("quotations_vendor_status_idx").on(table.vendorId, table.status),
+  ],
+);
+
+export const approvalRequests = pgTable(
+  "approval_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    quotationId: uuid("quotation_id").notNull(),
+    rfqId: uuid("rfq_id").notNull(),
+    vendorId: uuid("vendor_id").notNull(),
+    selectedByUserId: uuid("selected_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    selectedAt: timestamp("selected_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    status: approvalStatusEnum("status").default("PENDING").notNull(),
+    decidedByUserId: uuid("decided_by_user_id").references(() => users.id),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decisionRemarks: text("decision_remarks"),
+
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    unique("approval_requests_quotation_id_unique").on(table.quotationId),
+    foreignKey({
+      name: "approval_requests_quotation_rfq_vendor_fk",
+      columns: [table.quotationId, table.rfqId, table.vendorId],
+      foreignColumns: [quotations.id, quotations.rfqId, quotations.vendorId],
+    }),
+    index("approval_requests_rfq_status_idx").on(table.rfqId, table.status),
+    index("approval_requests_status_selected_at_idx").on(
+      table.status,
+      table.selectedAt,
+    ),
+    uniqueIndex("approval_requests_one_active_rfq_selection_unique")
+      .on(table.rfqId)
+      .where(sql`${table.status} IN ('PENDING', 'APPROVED')`),
+    check(
+      "approval_requests_decision_fields_consistent",
+      sql`(
+        (${table.status} = 'PENDING' AND ${table.decidedByUserId} IS NULL AND ${table.decidedAt} IS NULL AND ${table.decisionRemarks} IS NULL)
+        OR
+        (${table.status} IN ('APPROVED', 'REJECTED') AND ${table.decidedByUserId} IS NOT NULL AND ${table.decidedAt} IS NOT NULL AND ${table.decisionRemarks} IS NOT NULL)
+      )`,
+    ),
+  ],
+);
+
+export const approvalHistory = pgTable(
+  "approval_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    approvalRequestId: uuid("approval_request_id")
+      .notNull()
+      .references(() => approvalRequests.id, { onDelete: "cascade" }),
+    actorUserId: uuid("actor_user_id")
+      .notNull()
+      .references(() => users.id),
+    action: approvalHistoryActionEnum("action").notNull(),
+    remarks: text("remarks"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("approval_history_approval_request_occurred_at_idx").on(
+      table.approvalRequestId,
+      table.occurredAt,
+    ),
   ],
 );
 

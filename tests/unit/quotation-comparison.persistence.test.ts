@@ -46,7 +46,8 @@ describe("quotation comparison persistence", () => {
       unitPrice: "10.00",
     }]);
     const quotationWhere = vi.fn().mockReturnValue({ orderBy: quotationOrderBy });
-    const secondJoin = vi.fn().mockReturnValue({ where: quotationWhere });
+    const approvalJoin = vi.fn().mockReturnValue({ where: quotationWhere });
+    const secondJoin = vi.fn().mockReturnValue({ leftJoin: approvalJoin });
     const firstJoin = vi.fn().mockReturnValue({ innerJoin: secondJoin });
     const quotationFrom = vi.fn().mockReturnValue({ innerJoin: firstJoin });
     mocks.select
@@ -66,6 +67,7 @@ describe("quotation comparison persistence", () => {
     expect(quotationFrom).toHaveBeenCalledWith(quotations);
     expect(firstJoin).toHaveBeenCalledWith(vendors, expect.anything());
     expect(secondJoin).toHaveBeenCalledWith(quotationLineItems, expect.anything());
+    expect(approvalJoin).toHaveBeenCalledOnce();
   });
 
   it("returns null without querying line items or vendor quotations for a missing RFQ", async () => {

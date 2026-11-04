@@ -39,7 +39,12 @@ function promotionRequest(body: BodyInit): Request {
   });
 }
 
-function mockUpdate(result: typeof promotedUser | undefined): void {
+function mockUpdate(
+  result:
+    | typeof promotedUser
+    | (Omit<typeof promotedUser, "role"> & { role: "MANAGER" })
+    | undefined,
+): void {
   mocks.returning.mockResolvedValue(result ? [result] : []);
   mocks.where.mockReturnValue({ returning: mocks.returning });
   mocks.set.mockReturnValue({ where: mocks.where });
@@ -76,7 +81,7 @@ describe("PATCH /api/admin/users/[userId]/role", () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      message: "Only promotion to PROCUREMENT_OFFICER is supported.",
+      message: "Only promotion to PROCUREMENT_OFFICER or MANAGER is supported.",
     });
     expect(mocks.update).not.toHaveBeenCalled();
   });
@@ -104,5 +109,43 @@ describe("PATCH /api/admin/users/[userId]/role", () => {
       message: "User promoted to procurement officer.",
       user: promotedUser,
     });
+  });
+
+  it("allows an ADMIN to promote an existing user to manager", async () => {
+    const manager = { ...promotedUser, role: "MANAGER" as const };
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: adminUser });
+    mockUpdate(manager);
+
+    const response = await PATCH(
+      promotionRequest(JSON.stringify({ role: "MANAGER" })),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.set).toHaveBeenCalledWith(
+      expect.objectContaining({ role: "MANAGER", updatedAt: expect.any(Date) }),
+    );
+    await expect(response.json()).resolves.toEqual({
+      message: "User promoted to manager.",
+      user: manager,
+    });
+  });
+
+  it("prevents an ADMIN from changing their own role", async () => {
+    mocks.requireRole.mockResolvedValue({
+      authorized: true,
+      user: { ...adminUser, id: userId },
+    });
+
+    const response = await PATCH(
+      promotionRequest(JSON.stringify({ role: "MANAGER" })),
+      context,
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      message: "You cannot change your own role.",
+    });
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 });

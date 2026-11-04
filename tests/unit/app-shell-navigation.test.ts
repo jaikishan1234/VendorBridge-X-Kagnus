@@ -10,6 +10,7 @@ describe("application-shell quotation navigation", () => {
     expect(navigationItemsForRole("VENDOR")).toContain("Quotations");
     expect(navigationHref("Quotations", "VENDOR")).toBe("/my-quotations");
     expect(navigationLabel("Quotations", "VENDOR")).toBe("My Quotations");
+    expect(navigationItemsForRole("VENDOR")).not.toContain("Approvals");
   });
 
   it("keeps procurement quotation navigation on the comparison landing page", () => {
@@ -20,5 +21,6 @@ describe("application-shell quotation navigation", () => {
 
   it("does not expose the quotations navigation to unsupported roles", () => {
     expect(navigationItemsForRole("MANAGER")).not.toContain("Quotations");
+    expect(navigationHref("Approvals", "MANAGER")).toBe("/approvals");
   });
 });

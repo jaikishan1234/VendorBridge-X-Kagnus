@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { ComparedQuotation, QuotationComparison } from "@/lib/quotation-comparison";
 
 type SortMode = "lowest" | "vendor" | "latest";
@@ -38,12 +39,40 @@ export function filterAndSortQuotations(
 export function QuotationComparisonPanel({ comparison }: { comparison: QuotationComparison }) {
   const [vendorFilter, setVendorFilter] = useState("");
   const [sort, setSort] = useState<SortMode>("lowest");
-  const [selectedQuotationId, setSelectedQuotationId] = useState<string | null>(null);
+  const [selectingQuotationId, setSelectingQuotationId] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [selectionSuccess, setSelectionSuccess] = useState<string | null>(null);
+  const router = useRouter();
 
   const quotations = useMemo(
     () => filterAndSortQuotations(comparison.quotations, vendorFilter, sort),
     [comparison.quotations, sort, vendorFilter],
   );
+
+  async function requestApproval(quotationId: string) {
+    setSelectingQuotationId(quotationId);
+    setSelectionError(null);
+    setSelectionSuccess(null);
+
+    try {
+      const response = await fetch(
+        `/api/rfqs/${comparison.rfq.id}/quotations/${quotationId}/approval`,
+        { method: "POST" },
+      );
+      const payload = await response.json().catch(() => null) as { message?: string } | null;
+      if (!response.ok) {
+        setSelectionError(payload?.message ?? "Unable to select this quotation for approval.");
+        return;
+      }
+
+      setSelectionSuccess(payload?.message ?? "Quotation sent for manager approval.");
+      router.refresh();
+    } catch {
+      setSelectionError("Unable to select this quotation for approval. Please try again.");
+    } finally {
+      setSelectingQuotationId(null);
+    }
+  }
 
   return (
     <section aria-labelledby="submitted-quotations-heading" className="mt-7">
@@ -88,12 +117,15 @@ export function QuotationComparisonPanel({ comparison }: { comparison: Quotation
           No submitted quotations match that vendor filter.
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <>
+          {selectionError ? <p className="mt-4 rounded-[5px] border border-[#b86d6d] bg-[#2a1717] p-3 text-sm text-[#f2bbbb]" role="alert">{selectionError}</p> : null}
+          {selectionSuccess ? <p className="mt-4 rounded-[5px] border border-[#638d67] bg-[#142418] p-3 text-sm text-[#c8e9ca]" role="status">{selectionSuccess}</p> : null}
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
           {quotations.map((quotation) => {
             const pricesByLineItemId = new Map(
               quotation.lineItems.map((lineItem) => [lineItem.rfqLineItemId, lineItem.unitPrice]),
             );
-            const isSelected = selectedQuotationId === quotation.id;
+            const isSelecting = selectingQuotationId === quotation.id;
 
             return (
               <article
@@ -149,20 +181,26 @@ export function QuotationComparisonPanel({ comparison }: { comparison: Quotation
                 </dl>
 
                 <div className="mt-4 border-t border-[#454545] pt-4">
-                  <button
-                    aria-pressed={isSelected}
-                    className={`h-8 rounded-[4px] border px-3 text-xs transition-colors ${isSelected ? "border-[#72a877] bg-[#214829] text-[#d8f3d9]" : "border-[#777777] text-[#e8e8e8] hover:bg-[#252525]"}`}
-                    onClick={() => setSelectedQuotationId((current) => current === quotation.id ? null : quotation.id)}
-                    type="button"
-                  >
-                    {isSelected ? "Selected for Week 3 review" : "Select for Week 3 review"}
-                  </button>
-                  {isSelected ? <p className="mt-2 text-xs text-[#b7b7b7]">This selection is session-only. Week 3 approval persistence is not available yet.</p> : null}
+                  {quotation.approval ? (
+                    <p className="text-xs text-[#c8e9ca]">
+                      Approval status: {quotation.approval.status.charAt(0) + quotation.approval.status.slice(1).toLowerCase()}
+                    </p>
+                  ) : (
+                    <button
+                      className="h-8 rounded-[4px] border border-[#777777] px-3 text-xs text-[#e8e8e8] transition-colors hover:bg-[#252525] disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={selectingQuotationId !== null}
+                      onClick={() => requestApproval(quotation.id)}
+                      type="button"
+                    >
+                      {isSelecting ? "Sending for approval…" : "Send for approval"}
+                    </button>
+                  )}
                 </div>
               </article>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
     </section>
   );

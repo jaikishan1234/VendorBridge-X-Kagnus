@@ -1,6 +1,7 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  approvalRequests,
   quotationLineItems,
   quotations,
   rfqLineItems,
@@ -35,6 +36,10 @@ type SubmittedQuotationRow = {
   notes: string | null;
   rfqLineItemId: string;
   unitPrice: string;
+  approvalId?: string | null;
+  approvalStatus?: "PENDING" | "APPROVED" | "REJECTED" | null;
+  approvalSelectedAt?: Date | null;
+  approvalDecidedAt?: Date | null;
 };
 
 export type ComparedQuotation = {
@@ -52,6 +57,12 @@ export type ComparedQuotation = {
   totalMinor: string | null;
   isComparable: boolean;
   isLowest: boolean;
+  approval?: {
+    id: string;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    selectedAt: Date;
+    decidedAt: Date | null;
+  } | null;
 };
 
 export type QuotationComparison = {
@@ -123,6 +134,14 @@ export function buildQuotationComparison(
       totalMinor: null,
       isComparable: false,
       isLowest: false,
+      approval: row.approvalId && row.approvalStatus && row.approvalSelectedAt
+        ? {
+            id: row.approvalId,
+            status: row.approvalStatus,
+            selectedAt: row.approvalSelectedAt,
+            decidedAt: row.approvalDecidedAt ?? null,
+          }
+        : null,
     });
   }
 
@@ -214,6 +233,10 @@ export async function getQuotationComparison(
       notes: quotations.notes,
       rfqLineItemId: quotationLineItems.rfqLineItemId,
       unitPrice: quotationLineItems.unitPrice,
+      approvalId: approvalRequests.id,
+      approvalStatus: approvalRequests.status,
+      approvalSelectedAt: approvalRequests.selectedAt,
+      approvalDecidedAt: approvalRequests.decidedAt,
     })
     .from(quotations)
     .innerJoin(vendors, eq(vendors.id, quotations.vendorId))
@@ -221,6 +244,7 @@ export async function getQuotationComparison(
       quotationLineItems,
       eq(quotationLineItems.quotationId, quotations.id),
     )
+    .leftJoin(approvalRequests, eq(approvalRequests.quotationId, quotations.id))
     .where(
       and(eq(quotations.rfqId, rfqId), eq(quotations.status, "SUBMITTED")),
     )
