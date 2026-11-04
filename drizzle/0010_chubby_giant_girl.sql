@@ -34,12 +34,12 @@ ALTER TABLE "approval_history" ADD CONSTRAINT "approval_history_approval_request
 ALTER TABLE "approval_history" ADD CONSTRAINT "approval_history_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_selected_by_user_id_users_id_fk" FOREIGN KEY ("selected_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_decided_by_user_id_users_id_fk" FOREIGN KEY ("decided_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "quotations" ADD CONSTRAINT "quotations_id_rfq_vendor_unique" UNIQUE("id","rfq_id","vendor_id");--> statement-breakpoint
 ALTER TABLE "approval_requests" ADD CONSTRAINT "approval_requests_quotation_rfq_vendor_fk" FOREIGN KEY ("quotation_id","rfq_id","vendor_id") REFERENCES "public"."quotations"("id","rfq_id","vendor_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "approval_history_approval_request_occurred_at_idx" ON "approval_history" USING btree ("approval_request_id","occurred_at");--> statement-breakpoint
 CREATE INDEX "approval_requests_rfq_status_idx" ON "approval_requests" USING btree ("rfq_id","status");--> statement-breakpoint
 CREATE INDEX "approval_requests_status_selected_at_idx" ON "approval_requests" USING btree ("status","selected_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "approval_requests_one_active_rfq_selection_unique" ON "approval_requests" USING btree ("rfq_id") WHERE "approval_requests"."status" IN ('PENDING', 'APPROVED');--> statement-breakpoint
-ALTER TABLE "quotations" ADD CONSTRAINT "quotations_id_rfq_vendor_unique" UNIQUE("id","rfq_id","vendor_id");--> statement-breakpoint
 CREATE FUNCTION "prevent_approval_history_mutation"()
 RETURNS trigger
 LANGUAGE plpgsql
