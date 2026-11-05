@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   invoiceLineItems,
@@ -265,4 +265,81 @@ export async function generateInvoice(
   }
 
   throw new Error("Unable to generate a unique invoice number.");
+}
+
+export async function getInvoices(vendorId?: string) {
+  const selection = {
+    id: invoices.id,
+    invoiceNumber: invoices.invoiceNumber,
+    purchaseOrderId: invoices.purchaseOrderId,
+    vendorId: invoices.vendorId,
+    status: invoices.status,
+    currency: invoices.currency,
+    subtotalAmount: invoices.subtotalAmount,
+    gstRate: invoices.gstRate,
+    taxAmount: invoices.taxAmount,
+    grandTotal: invoices.grandTotal,
+    issuedAt: invoices.issuedAt,
+    createdAt: invoices.createdAt,
+    updatedAt: invoices.updatedAt,
+  };
+
+  const query = db.select(selection).from(invoices);
+
+  if (vendorId) {
+    return query
+      .where(eq(invoices.vendorId, vendorId))
+      .orderBy(desc(invoices.issuedAt));
+  }
+
+  return query.orderBy(desc(invoices.issuedAt));
+}
+
+export async function getInvoice(invoiceId: string, vendorId?: string) {
+  const [invoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      purchaseOrderId: invoices.purchaseOrderId,
+      vendorId: invoices.vendorId,
+      status: invoices.status,
+      currency: invoices.currency,
+      subtotalAmount: invoices.subtotalAmount,
+      gstRate: invoices.gstRate,
+      taxAmount: invoices.taxAmount,
+      grandTotal: invoices.grandTotal,
+      issuedAt: invoices.issuedAt,
+      createdAt: invoices.createdAt,
+      updatedAt: invoices.updatedAt,
+    })
+    .from(invoices)
+    .where(
+      vendorId
+        ? and(eq(invoices.id, invoiceId), eq(invoices.vendorId, vendorId))
+        : eq(invoices.id, invoiceId),
+    )
+    .limit(1);
+
+  if (!invoice) return null;
+
+  const lineItems = await db
+    .select({
+      id: invoiceLineItems.id,
+      invoiceId: invoiceLineItems.invoiceId,
+      purchaseOrderId: invoiceLineItems.purchaseOrderId,
+      purchaseOrderLineItemId: invoiceLineItems.purchaseOrderLineItemId,
+      lineNumber: invoiceLineItems.lineNumber,
+      description: invoiceLineItems.description,
+      quantity: invoiceLineItems.quantity,
+      unit: invoiceLineItems.unit,
+      unitPrice: invoiceLineItems.unitPrice,
+      lineTotal: invoiceLineItems.lineTotal,
+      createdAt: invoiceLineItems.createdAt,
+      updatedAt: invoiceLineItems.updatedAt,
+    })
+    .from(invoiceLineItems)
+    .where(eq(invoiceLineItems.invoiceId, invoice.id))
+    .orderBy(asc(invoiceLineItems.lineNumber));
+
+  return { ...invoice, lineItems };
 }
