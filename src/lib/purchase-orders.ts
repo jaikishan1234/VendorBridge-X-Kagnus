@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   approvalRequests,
@@ -314,4 +314,90 @@ export async function generatePurchaseOrder(
   }
 
   throw new Error("Unable to generate a unique purchase order number.");
+}
+
+export async function getPurchaseOrders(vendorId?: string) {
+  const selection = {
+    id: purchaseOrders.id,
+    poNumber: purchaseOrders.poNumber,
+    approvalRequestId: purchaseOrders.approvalRequestId,
+    quotationId: purchaseOrders.quotationId,
+    rfqId: purchaseOrders.rfqId,
+    vendorId: purchaseOrders.vendorId,
+    generatedByUserId: purchaseOrders.generatedByUserId,
+    status: purchaseOrders.status,
+    currency: purchaseOrders.currency,
+    totalAmount: purchaseOrders.totalAmount,
+    generatedAt: purchaseOrders.generatedAt,
+    createdAt: purchaseOrders.createdAt,
+    updatedAt: purchaseOrders.updatedAt,
+  };
+
+  if (vendorId) {
+    return db
+      .select(selection)
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.vendorId, vendorId))
+      .orderBy(desc(purchaseOrders.generatedAt));
+  }
+
+  return db
+    .select(selection)
+    .from(purchaseOrders)
+    .orderBy(desc(purchaseOrders.generatedAt));
+}
+
+export async function getPurchaseOrder(
+  purchaseOrderId: string,
+  vendorId?: string,
+) {
+  const [purchaseOrder] = await db
+    .select({
+      id: purchaseOrders.id,
+      poNumber: purchaseOrders.poNumber,
+      approvalRequestId: purchaseOrders.approvalRequestId,
+      quotationId: purchaseOrders.quotationId,
+      rfqId: purchaseOrders.rfqId,
+      vendorId: purchaseOrders.vendorId,
+      generatedByUserId: purchaseOrders.generatedByUserId,
+      status: purchaseOrders.status,
+      currency: purchaseOrders.currency,
+      totalAmount: purchaseOrders.totalAmount,
+      generatedAt: purchaseOrders.generatedAt,
+      createdAt: purchaseOrders.createdAt,
+      updatedAt: purchaseOrders.updatedAt,
+    })
+    .from(purchaseOrders)
+    .where(
+      vendorId
+        ? and(
+            eq(purchaseOrders.id, purchaseOrderId),
+            eq(purchaseOrders.vendorId, vendorId),
+          )
+        : eq(purchaseOrders.id, purchaseOrderId),
+    )
+    .limit(1);
+
+  if (!purchaseOrder) return null;
+
+  const lineItems = await db
+    .select({
+      id: purchaseOrderLineItems.id,
+      purchaseOrderId: purchaseOrderLineItems.purchaseOrderId,
+      rfqId: purchaseOrderLineItems.rfqId,
+      rfqLineItemId: purchaseOrderLineItems.rfqLineItemId,
+      lineNumber: purchaseOrderLineItems.lineNumber,
+      description: purchaseOrderLineItems.description,
+      quantity: purchaseOrderLineItems.quantity,
+      unit: purchaseOrderLineItems.unit,
+      unitPrice: purchaseOrderLineItems.unitPrice,
+      lineTotal: purchaseOrderLineItems.lineTotal,
+      createdAt: purchaseOrderLineItems.createdAt,
+      updatedAt: purchaseOrderLineItems.updatedAt,
+    })
+    .from(purchaseOrderLineItems)
+    .where(eq(purchaseOrderLineItems.purchaseOrderId, purchaseOrder.id))
+    .orderBy(asc(purchaseOrderLineItems.lineNumber));
+
+  return { ...purchaseOrder, lineItems };
 }
