@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn() }));
+const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn() }));
 
-vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
+vi.mock("@/db", () => ({ db: { transaction: mocks.transaction, select: mocks.select } }));
 
 import { purchaseOrderLineItems, purchaseOrders } from "@/db/schema";
 import {
   generatePurchaseOrder,
+  getPurchaseOrders,
   PurchaseOrderAlreadyExistsError,
   PurchaseOrderApprovalNotApprovedError,
   PurchaseOrderApprovalNotFoundError,
@@ -123,6 +124,23 @@ function query(result: unknown, lockForUpdate: ReturnType<typeof vi.fn>) {
   return chain;
 }
 
+function listQuery(result: unknown) {
+  const promise = Promise.resolve(result);
+  const chain = {
+    from: vi.fn(),
+    innerJoin: vi.fn(),
+    orderBy: vi.fn(),
+    where: vi.fn(),
+  };
+
+  chain.from.mockReturnValue(chain);
+  chain.innerJoin.mockReturnValue(chain);
+  chain.where.mockReturnValue(chain);
+  chain.orderBy.mockReturnValue(promise);
+
+  return chain;
+}
+
 function createTransaction(options: {
   approval?: typeof approvedApproval | { id: string; status: "PENDING" };
   existingPurchaseOrder?: Array<{ id: string }>;
@@ -184,6 +202,18 @@ function useTransactions(...transactions: Array<ReturnType<typeof createTransact
 beforeEach(() => vi.resetAllMocks());
 
 describe("purchase order persistence", () => {
+  it("builds the PO list query from the exported purchaseOrders table", async () => {
+    const list = listQuery([]);
+    mocks.select.mockReturnValue(list);
+
+    await expect(getPurchaseOrders()).resolves.toEqual([]);
+    expect(mocks.select).toHaveBeenCalledWith(expect.objectContaining({
+      id: purchaseOrders.id,
+      poNumber: purchaseOrders.poNumber,
+    }));
+    expect(list.from).toHaveBeenCalledWith(purchaseOrders);
+  });
+
   it("locks an approved approval and persists authoritative header and line snapshots", async () => {
     const transaction = createTransaction();
     useTransactions(transaction);
