@@ -497,6 +497,10 @@ export const purchaseOrderLineItems = pgTable(
       table.purchaseOrderId,
       table.rfqLineItemId,
     ),
+    unique("purchase_order_line_items_id_purchase_order_unique").on(
+      table.id,
+      table.purchaseOrderId,
+    ),
     foreignKey({
       name: "purchase_order_line_items_purchase_order_rfq_fk",
       columns: [table.purchaseOrderId, table.rfqId],
@@ -554,6 +558,10 @@ export const invoices = pgTable(
   (table) => [
     unique("invoices_invoice_number_unique").on(table.invoiceNumber),
     unique("invoices_purchase_order_id_unique").on(table.purchaseOrderId),
+    unique("invoices_id_purchase_order_unique").on(
+      table.id,
+      table.purchaseOrderId,
+    ),
     foreignKey({
       name: "invoices_purchase_order_vendor_fk",
       columns: [table.purchaseOrderId, table.vendorId],
@@ -580,6 +588,60 @@ export const invoices = pgTable(
     check(
       "invoices_grand_total_matches_components",
       sql`${table.grandTotal} = ${table.subtotalAmount} + ${table.taxAmount}`,
+    ),
+  ],
+);
+
+export const invoiceLineItems = pgTable(
+  "invoice_line_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    invoiceId: uuid("invoice_id").notNull(),
+    purchaseOrderId: uuid("purchase_order_id").notNull(),
+    purchaseOrderLineItemId: uuid("purchase_order_line_item_id").notNull(),
+    lineNumber: integer("line_number").notNull(),
+    description: text("description").notNull(),
+    quantity: numeric("quantity", { precision: 14, scale: 3 }).notNull(),
+    unit: text("unit").notNull(),
+    unitPrice: numeric("unit_price", { precision: 14, scale: 2 }).notNull(),
+    lineTotal: numeric("line_total", { precision: 28, scale: 2 }).notNull(),
+
+    createdAt: timestamp("created_at")
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("invoice_line_items_invoice_purchase_order_line_item_unique").on(
+      table.invoiceId,
+      table.purchaseOrderLineItemId,
+    ),
+    foreignKey({
+      name: "invoice_line_items_invoice_purchase_order_fk",
+      columns: [table.invoiceId, table.purchaseOrderId],
+      foreignColumns: [invoices.id, invoices.purchaseOrderId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "invoice_line_items_purchase_order_line_item_purchase_order_fk",
+      columns: [table.purchaseOrderLineItemId, table.purchaseOrderId],
+      foreignColumns: [purchaseOrderLineItems.id, purchaseOrderLineItems.purchaseOrderId],
+    }),
+    index("invoice_line_items_invoice_id_idx").on(table.invoiceId),
+    check(
+      "invoice_line_items_quantity_positive",
+      sql`${table.quantity} > 0`,
+    ),
+    check(
+      "invoice_line_items_unit_price_non_negative",
+      sql`${table.unitPrice} >= 0`,
+    ),
+    check(
+      "invoice_line_items_line_total_non_negative",
+      sql`${table.lineTotal} >= 0`,
     ),
   ],
 );
