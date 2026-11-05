@@ -54,6 +54,10 @@ export const approvalHistoryActionEnum = pgEnum("approval_history_action", [
   "REJECTED",
 ]);
 
+export const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
+  "GENERATED",
+]);
+
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
 
@@ -330,6 +334,12 @@ export const approvalRequests = pgTable(
   },
   (table) => [
     unique("approval_requests_quotation_id_unique").on(table.quotationId),
+    unique("approval_requests_id_quotation_rfq_vendor_unique").on(
+      table.id,
+      table.quotationId,
+      table.rfqId,
+      table.vendorId,
+    ),
     foreignKey({
       name: "approval_requests_quotation_rfq_vendor_fk",
       columns: [table.quotationId, table.rfqId, table.vendorId],
@@ -374,6 +384,133 @@ export const approvalHistory = pgTable(
     index("approval_history_approval_request_occurred_at_idx").on(
       table.approvalRequestId,
       table.occurredAt,
+    ),
+  ],
+);
+
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    poNumber: text("po_number").notNull(),
+    approvalRequestId: uuid("approval_request_id").notNull(),
+    quotationId: uuid("quotation_id").notNull(),
+    rfqId: uuid("rfq_id").notNull(),
+    vendorId: uuid("vendor_id").notNull(),
+    generatedByUserId: uuid("generated_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    status: purchaseOrderStatusEnum("status").default("GENERATED").notNull(),
+    currency: text("currency").notNull(),
+    totalAmount: numeric("total_amount", { precision: 28, scale: 2 }).notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+
+    createdAt: timestamp("created_at")
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("purchase_orders_po_number_unique").on(table.poNumber),
+    unique("purchase_orders_approval_request_id_unique").on(
+      table.approvalRequestId,
+    ),
+    unique("purchase_orders_quotation_id_unique").on(table.quotationId),
+    unique("purchase_orders_id_rfq_unique").on(table.id, table.rfqId),
+    foreignKey({
+      name: "purchase_orders_approval_request_quotation_rfq_vendor_fk",
+      columns: [
+        table.approvalRequestId,
+        table.quotationId,
+        table.rfqId,
+        table.vendorId,
+      ],
+      foreignColumns: [
+        approvalRequests.id,
+        approvalRequests.quotationId,
+        approvalRequests.rfqId,
+        approvalRequests.vendorId,
+      ],
+    }),
+    foreignKey({
+      name: "purchase_orders_quotation_rfq_vendor_fk",
+      columns: [table.quotationId, table.rfqId, table.vendorId],
+      foreignColumns: [quotations.id, quotations.rfqId, quotations.vendorId],
+    }),
+    index("purchase_orders_vendor_generated_at_idx").on(
+      table.vendorId,
+      table.generatedAt,
+    ),
+    index("purchase_orders_status_generated_at_idx").on(
+      table.status,
+      table.generatedAt,
+    ),
+    check(
+      "purchase_orders_total_amount_non_negative",
+      sql`${table.totalAmount} >= 0`,
+    ),
+  ],
+);
+
+export const purchaseOrderLineItems = pgTable(
+  "purchase_order_line_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    purchaseOrderId: uuid("purchase_order_id")
+      .notNull(),
+    rfqId: uuid("rfq_id").notNull(),
+    rfqLineItemId: uuid("rfq_line_item_id").notNull(),
+    lineNumber: integer("line_number").notNull(),
+    description: text("description").notNull(),
+    quantity: numeric("quantity", { precision: 14, scale: 3 }).notNull(),
+    unit: text("unit").notNull(),
+    unitPrice: numeric("unit_price", { precision: 14, scale: 2 }).notNull(),
+    lineTotal: numeric("line_total", { precision: 28, scale: 2 }).notNull(),
+
+    createdAt: timestamp("created_at")
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("purchase_order_line_items_purchase_order_rfq_line_item_unique").on(
+      table.purchaseOrderId,
+      table.rfqLineItemId,
+    ),
+    foreignKey({
+      name: "purchase_order_line_items_purchase_order_rfq_fk",
+      columns: [table.purchaseOrderId, table.rfqId],
+      foreignColumns: [purchaseOrders.id, purchaseOrders.rfqId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "purchase_order_line_items_rfq_line_item_rfq_fk",
+      columns: [table.rfqLineItemId, table.rfqId],
+      foreignColumns: [rfqLineItems.id, rfqLineItems.rfqId],
+    }),
+    index("purchase_order_line_items_purchase_order_id_idx").on(
+      table.purchaseOrderId,
+    ),
+    check(
+      "purchase_order_line_items_quantity_positive",
+      sql`${table.quantity} > 0`,
+    ),
+    check(
+      "purchase_order_line_items_unit_price_non_negative",
+      sql`${table.unitPrice} >= 0`,
+    ),
+    check(
+      "purchase_order_line_items_line_total_non_negative",
+      sql`${table.lineTotal} >= 0`,
     ),
   ],
 );
