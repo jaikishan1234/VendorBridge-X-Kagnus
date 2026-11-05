@@ -58,6 +58,15 @@ export const purchaseOrderStatusEnum = pgEnum("purchase_order_status", [
   "GENERATED",
 ]);
 
+export const invoiceStatusEnum = pgEnum("invoice_status", [
+  "GENERATED",
+]);
+
+export const invoiceEmailDeliveryStatusEnum = pgEnum(
+  "invoice_email_delivery_status",
+  ["SENT", "FAILED"],
+);
+
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
 
@@ -423,6 +432,7 @@ export const purchaseOrders = pgTable(
     ),
     unique("purchase_orders_quotation_id_unique").on(table.quotationId),
     unique("purchase_orders_id_rfq_unique").on(table.id, table.rfqId),
+    unique("purchase_orders_id_vendor_unique").on(table.id, table.vendorId),
     foreignKey({
       name: "purchase_orders_approval_request_quotation_rfq_vendor_fk",
       columns: [
@@ -511,6 +521,96 @@ export const purchaseOrderLineItems = pgTable(
     check(
       "purchase_order_line_items_line_total_non_negative",
       sql`${table.lineTotal} >= 0`,
+    ),
+  ],
+);
+
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    invoiceNumber: text("invoice_number").notNull(),
+    purchaseOrderId: uuid("purchase_order_id").notNull(),
+    vendorId: uuid("vendor_id").notNull(),
+    status: invoiceStatusEnum("status").default("GENERATED").notNull(),
+    currency: text("currency").notNull(),
+    subtotalAmount: numeric("subtotal_amount", { precision: 28, scale: 2 }).notNull(),
+    gstRate: numeric("gst_rate", { precision: 7, scale: 4 }).notNull(),
+    taxAmount: numeric("tax_amount", { precision: 28, scale: 2 }).notNull(),
+    grandTotal: numeric("grand_total", { precision: 28, scale: 2 }).notNull(),
+    issuedAt: timestamp("issued_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+
+    createdAt: timestamp("created_at")
+      .defaultNow()
+      .notNull(),
+
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("invoices_invoice_number_unique").on(table.invoiceNumber),
+    unique("invoices_purchase_order_id_unique").on(table.purchaseOrderId),
+    foreignKey({
+      name: "invoices_purchase_order_vendor_fk",
+      columns: [table.purchaseOrderId, table.vendorId],
+      foreignColumns: [purchaseOrders.id, purchaseOrders.vendorId],
+    }),
+    index("invoices_vendor_issued_at_idx").on(table.vendorId, table.issuedAt),
+    index("invoices_status_issued_at_idx").on(table.status, table.issuedAt),
+    check(
+      "invoices_subtotal_amount_non_negative",
+      sql`${table.subtotalAmount} >= 0`,
+    ),
+    check(
+      "invoices_gst_rate_valid",
+      sql`${table.gstRate} >= 0 AND ${table.gstRate} <= 100`,
+    ),
+    check(
+      "invoices_tax_amount_non_negative",
+      sql`${table.taxAmount} >= 0`,
+    ),
+    check(
+      "invoices_grand_total_non_negative",
+      sql`${table.grandTotal} >= 0`,
+    ),
+    check(
+      "invoices_grand_total_matches_components",
+      sql`${table.grandTotal} = ${table.subtotalAmount} + ${table.taxAmount}`,
+    ),
+  ],
+);
+
+export const invoiceEmailDeliveries = pgTable(
+  "invoice_email_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    recipientEmail: text("recipient_email").notNull(),
+    status: invoiceEmailDeliveryStatusEnum("status").notNull(),
+    attemptedAt: timestamp("attempted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    failureReason: text("failure_reason"),
+  },
+  (table) => [
+    index("invoice_email_deliveries_invoice_attempted_at_idx").on(
+      table.invoiceId,
+      table.attemptedAt,
+    ),
+    check(
+      "invoice_email_deliveries_failure_reason_consistent",
+      sql`(
+        (${table.status} = 'SENT' AND ${table.failureReason} IS NULL)
+        OR
+        (${table.status} = 'FAILED' AND ${table.failureReason} IS NOT NULL)
+      )`,
     ),
   ],
 );
