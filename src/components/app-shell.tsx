@@ -11,7 +11,13 @@ type AppShellUser = {
 
 type AppShellProps = {
   user: AppShellUser;
-  activeItem: "Dashboard" | "Vendors" | "RFQs" | "Quotations" | "Approvals";
+  activeItem:
+    | "Dashboard"
+    | "Vendors"
+    | "RFQs"
+    | "Quotations"
+    | "Approvals"
+    | "Purchase Orders";
   children: ReactNode;
 };
 
@@ -33,6 +39,12 @@ export function navigationHref(item: string, role: UserRole) {
   if (item === "RFQs") return "/rfqs";
   if (item === "Quotations") return role === "VENDOR" ? "/my-quotations" : "/quotations";
   if (item === "Approvals" && role === "MANAGER") return "/approvals";
+  if (
+    item === "Purchase Orders" &&
+    (role === "PROCUREMENT_OFFICER" || role === "VENDOR")
+  ) {
+    return "/purchase-orders";
+  }
 
   return `/dashboard?comingSoon=${encodeURIComponent(item)}`;
 }
@@ -50,7 +62,9 @@ export function navigationItemsForRole(role: UserRole) {
     return navigationItems.filter((item) => item !== "Approvals");
   }
 
-  return navigationItems.filter((item) => item !== "Quotations");
+  return navigationItems.filter(
+    (item) => item !== "Quotations" && item !== "Purchase Orders",
+  );
 }
 
 export function AppShell({ user, activeItem, children }: AppShellProps) {

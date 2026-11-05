@@ -19,8 +19,17 @@ describe("application-shell quotation navigation", () => {
     expect(navigationLabel("Quotations", "PROCUREMENT_OFFICER")).toBe("Quotations");
   });
 
+  it("exposes Purchase Orders only to procurement officers and vendors", () => {
+    expect(navigationItemsForRole("PROCUREMENT_OFFICER")).toContain("Purchase Orders");
+    expect(navigationHref("Purchase Orders", "PROCUREMENT_OFFICER")).toBe("/purchase-orders");
+    expect(navigationItemsForRole("VENDOR")).toContain("Purchase Orders");
+    expect(navigationHref("Purchase Orders", "VENDOR")).toBe("/purchase-orders");
+  });
+
   it("does not expose the quotations navigation to unsupported roles", () => {
     expect(navigationItemsForRole("MANAGER")).not.toContain("Quotations");
+    expect(navigationItemsForRole("MANAGER")).not.toContain("Purchase Orders");
+    expect(navigationItemsForRole("ADMIN")).not.toContain("Purchase Orders");
     expect(navigationHref("Approvals", "MANAGER")).toBe("/approvals");
   });
 });

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireRole } from "@/lib/authorization";
 import {
   generatePurchaseOrder,
+  getApprovedPurchaseOrderCandidates,
   getPurchaseOrders,
   PurchaseOrderAlreadyExistsError,
   PurchaseOrderApprovalNotApprovedError,
@@ -103,10 +104,16 @@ export async function GET() {
   }
 
   try {
-    const purchaseOrders = await getPurchaseOrders(
-      viewer.kind === "vendor" ? viewer.vendorId : undefined,
-    );
-    return NextResponse.json({ purchaseOrders });
+    if (viewer.kind === "procurement") {
+      const [purchaseOrders, approvedQuotations] = await Promise.all([
+        getPurchaseOrders(),
+        getApprovedPurchaseOrderCandidates(),
+      ]);
+      return NextResponse.json({ purchaseOrders, approvedQuotations });
+    }
+
+    const purchaseOrders = await getPurchaseOrders(viewer.vendorId);
+    return NextResponse.json({ purchaseOrders, approvedQuotations: [] });
   } catch (error) {
     console.error("Get purchase orders error:", error);
     return NextResponse.json(

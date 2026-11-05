@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   approvalRequests,
@@ -331,20 +331,54 @@ export async function getPurchaseOrders(vendorId?: string) {
     generatedAt: purchaseOrders.generatedAt,
     createdAt: purchaseOrders.createdAt,
     updatedAt: purchaseOrders.updatedAt,
+    rfqNumber: rfqs.rfqNumber,
+    rfqTitle: rfqs.title,
+    vendorName: vendors.vendorName,
   };
 
+  const query = db
+    .select(selection)
+    .from(purchaseOrders)
+    .innerJoin(rfqs, eq(purchaseOrders.rfqId, rfqs.id))
+    .innerJoin(vendors, eq(purchaseOrders.vendorId, vendors.id));
+
   if (vendorId) {
-    return db
-      .select(selection)
-      .from(purchaseOrders)
+    return query
       .where(eq(purchaseOrders.vendorId, vendorId))
       .orderBy(desc(purchaseOrders.generatedAt));
   }
 
+  return query.orderBy(desc(purchaseOrders.generatedAt));
+}
+
+export async function getApprovedPurchaseOrderCandidates() {
   return db
-    .select(selection)
-    .from(purchaseOrders)
-    .orderBy(desc(purchaseOrders.generatedAt));
+    .select({
+      approvalRequestId: approvalRequests.id,
+      quotationId: quotations.id,
+      rfqId: rfqs.id,
+      rfqNumber: rfqs.rfqNumber,
+      rfqTitle: rfqs.title,
+      vendorId: vendors.id,
+      vendorName: vendors.vendorName,
+      currency: rfqs.currency,
+      approvedAt: approvalRequests.decidedAt,
+    })
+    .from(approvalRequests)
+    .innerJoin(quotations, eq(approvalRequests.quotationId, quotations.id))
+    .innerJoin(rfqs, eq(approvalRequests.rfqId, rfqs.id))
+    .innerJoin(vendors, eq(approvalRequests.vendorId, vendors.id))
+    .leftJoin(
+      purchaseOrders,
+      eq(purchaseOrders.approvalRequestId, approvalRequests.id),
+    )
+    .where(
+      and(
+        eq(approvalRequests.status, "APPROVED"),
+        isNull(purchaseOrders.id),
+      ),
+    )
+    .orderBy(desc(approvalRequests.decidedAt));
 }
 
 export async function getPurchaseOrder(
@@ -366,8 +400,13 @@ export async function getPurchaseOrder(
       generatedAt: purchaseOrders.generatedAt,
       createdAt: purchaseOrders.createdAt,
       updatedAt: purchaseOrders.updatedAt,
+      rfqNumber: rfqs.rfqNumber,
+      rfqTitle: rfqs.title,
+      vendorName: vendors.vendorName,
     })
     .from(purchaseOrders)
+    .innerJoin(rfqs, eq(purchaseOrders.rfqId, rfqs.id))
+    .innerJoin(vendors, eq(purchaseOrders.vendorId, vendors.id))
     .where(
       vendorId
         ? and(

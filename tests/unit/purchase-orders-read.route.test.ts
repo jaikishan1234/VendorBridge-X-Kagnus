@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getRfqViewer: vi.fn(),
   getPurchaseOrders: vi.fn(),
+  getApprovedPurchaseOrderCandidates: vi.fn(),
   getPurchaseOrder: vi.fn(),
 }));
 
 vi.mock("@/lib/rfq-access", () => ({ getRfqViewer: mocks.getRfqViewer }));
 vi.mock("@/lib/purchase-orders", () => ({
   getPurchaseOrders: mocks.getPurchaseOrders,
+  getApprovedPurchaseOrderCandidates: mocks.getApprovedPurchaseOrderCandidates,
   getPurchaseOrder: mocks.getPurchaseOrder,
 }));
 
@@ -61,12 +63,14 @@ describe("Purchase Order read routes", () => {
     const purchaseOrders = [{ id: purchaseOrderId }];
     mocks.getRfqViewer.mockResolvedValue(procurementViewer);
     mocks.getPurchaseOrders.mockResolvedValue(purchaseOrders);
+    mocks.getApprovedPurchaseOrderCandidates.mockResolvedValue([]);
 
     const response = await listPurchaseOrders();
 
     expect(response.status).toBe(200);
-    expect(mocks.getPurchaseOrders).toHaveBeenCalledWith(undefined);
-    await expect(response.json()).resolves.toEqual({ purchaseOrders });
+    expect(mocks.getPurchaseOrders).toHaveBeenCalledWith();
+    expect(mocks.getApprovedPurchaseOrderCandidates).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toEqual({ purchaseOrders, approvedQuotations: [] });
   });
 
   it("lists only membership-linked vendor purchase orders", async () => {
@@ -77,6 +81,7 @@ describe("Purchase Order read routes", () => {
 
     expect(response.status).toBe(200);
     expect(mocks.getPurchaseOrders).toHaveBeenCalledWith(vendorId);
+    expect(mocks.getApprovedPurchaseOrderCandidates).not.toHaveBeenCalled();
   });
 
   it("returns a PO detail for procurement officers", async () => {
