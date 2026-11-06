@@ -20,6 +20,37 @@ export class InvoiceAlreadyExistsError extends Error {}
 export class InvoiceSourceInvalidError extends Error {}
 export class InvoiceGstRateConfigurationError extends Error {}
 
+export type InvoiceDocument = {
+  id: string;
+  invoiceNumber: string;
+  purchaseOrderId: string;
+  vendorId: string;
+  status: string;
+  currency: string;
+  subtotalAmount: string;
+  gstRate: string;
+  taxAmount: string;
+  grandTotal: string;
+  issuedAt: Date;
+  purchaseOrderNumber: string;
+  vendor: {
+    name: string;
+    contactName: string;
+    email: string;
+    phoneNumber: string;
+    gstNumber: string | null;
+  };
+  lineItems: Array<{
+    id: string;
+    lineNumber: number;
+    description: string;
+    quantity: string;
+    unit: string;
+    unitPrice: string;
+    lineTotal: string;
+  }>;
+};
+
 type InvoiceSourceLineItem = {
   id: string;
   lineNumber: number;
@@ -342,4 +373,83 @@ export async function getInvoice(invoiceId: string, vendorId?: string) {
     .orderBy(asc(invoiceLineItems.lineNumber));
 
   return { ...invoice, lineItems };
+}
+
+/**
+ * Loads every value displayed in an invoice PDF from immutable invoice records
+ * and its related persisted PO/vendor records. The optional vendor ID is an
+ * authorization scope, not document data supplied by a caller.
+ */
+export async function getInvoiceDocument(
+  invoiceId: string,
+  vendorId?: string,
+): Promise<InvoiceDocument | null> {
+  const [invoice] = await db
+    .select({
+      id: invoices.id,
+      invoiceNumber: invoices.invoiceNumber,
+      purchaseOrderId: invoices.purchaseOrderId,
+      vendorId: invoices.vendorId,
+      status: invoices.status,
+      currency: invoices.currency,
+      subtotalAmount: invoices.subtotalAmount,
+      gstRate: invoices.gstRate,
+      taxAmount: invoices.taxAmount,
+      grandTotal: invoices.grandTotal,
+      issuedAt: invoices.issuedAt,
+      purchaseOrderNumber: purchaseOrders.poNumber,
+      vendorName: vendors.vendorName,
+      vendorContactName: vendors.contactName,
+      vendorEmail: vendors.email,
+      vendorPhoneNumber: vendors.phoneNumber,
+      vendorGstNumber: vendors.gstNumber,
+    })
+    .from(invoices)
+    .innerJoin(purchaseOrders, eq(purchaseOrders.id, invoices.purchaseOrderId))
+    .innerJoin(vendors, eq(vendors.id, invoices.vendorId))
+    .where(
+      vendorId
+        ? and(eq(invoices.id, invoiceId), eq(invoices.vendorId, vendorId))
+        : eq(invoices.id, invoiceId),
+    )
+    .limit(1);
+
+  if (!invoice) return null;
+
+  const lineItems = await db
+    .select({
+      id: invoiceLineItems.id,
+      lineNumber: invoiceLineItems.lineNumber,
+      description: invoiceLineItems.description,
+      quantity: invoiceLineItems.quantity,
+      unit: invoiceLineItems.unit,
+      unitPrice: invoiceLineItems.unitPrice,
+      lineTotal: invoiceLineItems.lineTotal,
+    })
+    .from(invoiceLineItems)
+    .where(eq(invoiceLineItems.invoiceId, invoice.id))
+    .orderBy(asc(invoiceLineItems.lineNumber));
+
+  return {
+    id: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    purchaseOrderId: invoice.purchaseOrderId,
+    vendorId: invoice.vendorId,
+    status: invoice.status,
+    currency: invoice.currency,
+    subtotalAmount: invoice.subtotalAmount,
+    gstRate: invoice.gstRate,
+    taxAmount: invoice.taxAmount,
+    grandTotal: invoice.grandTotal,
+    issuedAt: invoice.issuedAt,
+    purchaseOrderNumber: invoice.purchaseOrderNumber,
+    vendor: {
+      name: invoice.vendorName,
+      contactName: invoice.vendorContactName,
+      email: invoice.vendorEmail,
+      phoneNumber: invoice.vendorPhoneNumber,
+      gstNumber: invoice.vendorGstNumber,
+    },
+    lineItems,
+  };
 }
