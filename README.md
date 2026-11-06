@@ -1,6 +1,6 @@
 # VendorBridge — Procurement & Vendor Management ERP
 
-VendorBridge is a procurement and vendor-management ERP implemented across Week 1 and Week 2. Week 1 establishes authentication, vendor records, and protected application areas. Week 2 adds the RFQ-to-quotation workflow, authenticated RFQ attachments, vendor-scoped access, and procurement quotation comparison.
+VendorBridge is a procurement and vendor-management ERP implemented across Weeks 1 to 3. Week 1 establishes authentication, vendor records, and protected application areas. Week 2 adds the RFQ-to-quotation workflow, authenticated RFQ attachments, vendor-scoped access, and procurement quotation comparison. Week 3 adds approval decisions, purchase orders, invoices, PDF rendering, and configurable invoice-email delivery.
 
 ## Project Overview
 
@@ -11,6 +11,9 @@ The implemented workflow is:
 3. The Procurement Officer saves the RFQ as a draft or publishes it.
 4. A vendor whose membership is linked to an assigned vendor profile can view the open RFQ, its attachments, and submit a quotation.
 5. A Procurement Officer reviews submitted quotations and compares their totals, delivery timelines, and notes.
+6. A Procurement Officer selects a submitted quotation for approval; a Manager approves or rejects the request with remarks.
+7. An approved selection can generate a purchase order and then a single invoice for that purchase order.
+8. Authorized users can view invoices, download invoice PDFs, and—when the required server configuration is present—send an invoice email to the vendor's registered address.
 
 ## Features Implemented
 
@@ -69,6 +72,45 @@ The implemented workflow is:
 - The client can filter by vendor name and sort by lowest comparable total, vendor name, or most recent submission. It includes empty, loading, and error states.
 - Vendor rating data and rating functionality are not present.
 
+## Week 3: Approval, Purchase Orders, and Invoices
+
+### Approval workflow
+
+- A Procurement Officer can select a submitted quotation and create an approval request. The request stores the selected quotation, RFQ, and vendor relationship server-side.
+- A Manager can view approval requests and approve or reject a pending request. A decision requires remarks.
+- Approval decisions transition only from `PENDING` to `APPROVED` or `REJECTED`. Approval history records the decision and timestamp as an immutable audit trail.
+
+### Purchase Orders
+
+- Purchase orders are created only from approved requests. Their generated numbers use the `PO-YYYYMMDD-...` format.
+- Each purchase order retains the approved RFQ, quotation, and vendor relationships, with monetary values persisted using exact database decimals and cent rounding.
+- Duplicate PO generation is prevented. Procurement Officers can view all purchase orders; vendors can view only purchase orders associated with their membership-derived vendor identity.
+- The Purchase Orders UI includes list and detail views. It shows **Generate Invoice** to Procurement Officers only when the PO does not already have an invoice.
+
+### Invoices
+
+- A single invoice can be generated for a persisted purchase order. Invoice headers, totals, GST-rate snapshots, and line-item snapshots are stored at generation time.
+- PDF rendering uses those persisted values; it does not recalculate invoice totals. The configurable GST rate is applied during invoice generation, not while rendering the PDF.
+- Procurement Officers can access all invoices. Vendors can access only their own invoices, derived from membership; the UI and APIs do not disclose another vendor's invoice data.
+- Invoice PDFs are created server-side with PDFKit and contain issuer configuration, invoice and source-PO details, vendor details, line items, and persisted totals.
+- Invoice email delivery uses Nodemailer with server-side SMTP configuration. The recipient is always the vendor's persisted registered email, the generated PDF is attached, and `SENT` or `FAILED` attempts are recorded in `invoice_email_deliveries`.
+- SMTP acceptance confirms handoff to the SMTP service, not delivery to the recipient's inbox. Sending an email does not change the invoice status.
+
+## Week 3 API
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/rfqs/[rfqId]/quotations/[quotationId]/approval` | Create an approval request for a selected submitted quotation |
+| `GET` | `/api/approvals` | List authorized approval requests |
+| `GET` | `/api/approvals/[approvalId]` | Read an authorized approval request |
+| `POST` | `/api/approvals/[approvalId]/decision` | Approve or reject a pending request with required remarks |
+| `GET`, `POST` | `/api/purchase-orders` | List authorized POs or generate one from an approved request |
+| `GET` | `/api/purchase-orders/[poId]` | Read an authorized PO |
+| `GET`, `POST` | `/api/invoices` | List authorized invoices or generate one from a PO |
+| `GET` | `/api/invoices/[invoiceId]` | Read an authorized invoice |
+| `GET` | `/api/invoices/[invoiceId]/pdf` | Download an authorized invoice PDF |
+| `POST` | `/api/invoices/[invoiceId]/email` | Send an invoice email; Procurement Officer only |
+
 ## Technology Stack
 
 | Area | Technology |
@@ -77,6 +119,7 @@ The implemented workflow is:
 | Database | Neon PostgreSQL, Drizzle ORM, Drizzle Kit |
 | Validation and security | Zod, Argon2 |
 | File storage | ImageKit |
+| Documents and invoice email | PDFKit, Nodemailer with configurable Gmail SMTP |
 | Testing | Vitest |
 
 ## Architecture and Project Structure
@@ -88,10 +131,10 @@ src/
     api/vendors/       Procurement vendor creation route
     api/vendor-profile/ Vendor self-profile route
     api/rfqs/          RFQ, attachment, quotation, and comparison routes
-  components/          Application shell, forms, RFQ and quotation UI
+  components/          Application shell, forms, RFQ, approval, PO, and invoice UI
   db/                  Neon/Drizzle client and PostgreSQL schema
   lib/                 Auth, authorisation, access control, ImageKit,
-                       quotation/RFQ services, and Zod schemas
+                       RFQ, approval, PO, invoice, PDF, email services, and Zod schemas
   types/               Shared TypeScript types
 drizzle/               Committed SQL migrations and Drizzle snapshots
 scripts/               Test-branch procurement-officer provisioning CLI
@@ -99,7 +142,7 @@ tests/unit/            Unit, route, persistence, and validation tests
 tests/integration/     Isolated-Neon-branch integration-test safeguards
 ```
 
-The main pages are `/dashboard`, `/vendors`, `/rfqs`, `/quotations`, and `/my-quotations`. The shared application shell routes vendor users to **My Quotations** and Procurement Officers to **Quotations**.
+The main pages are `/dashboard`, `/vendors`, `/rfqs`, `/quotations`, `/my-quotations`, `/approvals`, `/purchase-orders`, and `/invoices`. The shared application shell provides the appropriate quotation, purchase-order, and invoice navigation for authorized roles.
 
 ## Prerequisites and Installation
 
@@ -155,6 +198,24 @@ IMAGEKIT_URL_ENDPOINT="https://ik.imagekit.io/your_imagekit_id"
 
 `DATABASE_URL` is read by the application and the development Drizzle configuration. The three ImageKit settings are read only when attachment operations need them; attachment upload returns a configuration error when they are absent.
 
+### Invoice configuration (server-only)
+
+Invoice generation requires `INVOICE_GST_RATE`. It has no default value.
+
+PDF generation requires all of these issuer settings:
+
+- `INVOICE_ISSUER_LEGAL_NAME`
+- `INVOICE_ISSUER_ADDRESS_LINE1`
+- `INVOICE_ISSUER_CITY`
+- `INVOICE_ISSUER_STATE`
+- `INVOICE_ISSUER_POSTAL_CODE`
+- `INVOICE_ISSUER_COUNTRY`
+- `INVOICE_ISSUER_GSTIN`
+
+The issuer address line two, email, and phone are optional: `INVOICE_ISSUER_ADDRESS_LINE2`, `INVOICE_ISSUER_EMAIL`, and `INVOICE_ISSUER_PHONE`.
+
+Invoice email delivery requires `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_APP_PASSWORD`, and `INVOICE_EMAIL_FROM`. Configure these with valid Gmail SMTP credentials and an app password where Gmail requires one. All invoice and SMTP settings are server-only: do not prefix them with `NEXT_PUBLIC_`, and never commit them to an environment file.
+
 ### Isolated integration-test branch (`.env.test.local`)
 
 ```dotenv
@@ -188,6 +249,10 @@ The committed migration journal contains the following migrations:
 | `0007_graceful_union_jack.sql` | RFQ attachment metadata and indexes |
 | `0008_rfq_categories.sql` | Required RFQ category, backfilled as `Other` for existing rows |
 | `0009_quotation_delivery_and_notes.sql` | Quotation delivery timeline and notes |
+| `0010_chubby_giant_girl.sql` | Approval requests, decisions, and immutable approval history |
+| `0011_wet_cardiac.sql` | Purchase orders and approved-quotation relationships |
+| `0012_yellow_starhawk.sql` | Invoice headers and invoice email delivery audit records |
+| `0013_outgoing_darwin.sql` | Immutable invoice line-item snapshots |
 
 Apply development migrations with:
 
@@ -217,9 +282,9 @@ It prompts for a password without echoing it, refuses duplicate username/email v
 
 | Role | Implemented access |
 | --- | --- |
-| `VENDOR` | Publicly assigned at registration. A linked vendor sees only assigned open RFQs, their permitted attachments, and its own quotations; it can create one self-profile only while unlinked. |
-| `PROCUREMENT_OFFICER` | Creates, lists, and views vendors; creates and publishes RFQs; manages RFQ attachments; views RFQs and submitted-quotation comparisons. |
-| `MANAGER` | Stored in the role enum, but no dedicated procurement or vendor workflow is implemented for it. |
+| `VENDOR` | Publicly assigned at registration. A linked vendor sees only assigned open RFQs, permitted attachments, its own quotations, and its own purchase orders and invoices; it can create one self-profile only while unlinked. |
+| `PROCUREMENT_OFFICER` | Creates, lists, and views vendors; creates and publishes RFQs; manages RFQ attachments; views comparisons; creates approval requests; generates purchase orders and invoices; downloads all invoice PDFs; and sends invoice email. |
+| `MANAGER` | Reviews authorized approval requests and approves or rejects pending requests with required remarks. |
 | `ADMIN` | `requireRole()` and the example admin test route exist; the implemented user-role mutation is promotion to `PROCUREMENT_OFFICER`. No role-management UI exists. |
 
 Public signup cannot choose a higher-level role. Vendor membership—not a client-provided vendor identifier—determines which RFQs and quotations a vendor can access.
@@ -239,20 +304,22 @@ The test configuration separates unit and integration projects:
 | Type check | `npx tsc --noEmit` |
 | Lint | `npm run lint` |
 
-The unit suite covers authentication helpers and route handlers, role checks, vendor profile and vendor-management routes/pages, RFQ creation/detail/publication/access, ImageKit attachment authorisation/linking/downloading, quotation validation/persistence/routes, My Quotations persistence, quotation comparison, and test-branch provisioning safeguards. The latest local run completed successfully with **156 tests in 38 test files**.
+The unit suite covers authentication helpers and route handlers, role checks, vendor profile and vendor-management routes/pages, RFQ creation/detail/publication/access, ImageKit attachment authorisation/linking/downloading, quotation validation/persistence/routes, approval decisions, purchase-order and invoice generation/access, PDF rendering/download, invoice email delivery, UI behavior, and test-branch provisioning safeguards. The latest reported local run completed successfully with **293 tests in 60 test files**; the reported TypeScript check, lint, and `git diff --check` also passed.
 
 Integration testing reads only `.env.test.local` and validates its configured Neon branch ID before database access. It does not apply migrations automatically.
 
 ## Known Limitations and Scope
 
-- Email delivery and notification workflows are not implemented. Public registration does not add email verification, and password-reset routes do not send reset email.
+- Public registration does not add email verification, and password-reset routes do not send reset email.
 - RFQ status values include `CLOSED` and `CANCELLED`, but this implementation provides draft creation and publishing to `OPEN`; no close, cancel, or RFQ-edit workflow is exposed.
 - Vendor update/delete operations and a general role-management UI are not implemented.
 - Vendors cannot associate themselves with an existing vendor profile through an application endpoint; the self-onboarding flow creates a new pending profile and membership.
 - Submitted quotations are intentionally immutable. Draft quotations remain editable.
-- Selecting a quotation on the comparison screen is session-only client state; Week 3 approval/selection persistence is not implemented.
 - Vendor ratings are unavailable.
-- Dashboard cards and later ERP modules (approvals, purchase orders, invoices, reports, and activity) remain outside the implemented Week 2 scope.
+- Dashboard enhancements, reports, and activity modules remain outside the implemented scope.
+- Invoice PDFs require valid issuer legal, address, and GSTIN configuration; invoice generation requires a configured GST rate.
+- Live email delivery requires valid Gmail SMTP credentials, an app password where required, and valid PDF issuer configuration. SMTP acceptance does not prove inbox delivery.
+- This repository does not claim that live PDF generation, printing, or live invoice email delivery has been demonstrated in a deployed environment.
 - No deployment URL, screenshots, or recorded demonstration are included in this repository.
 
 ## Week 2 Workflow
@@ -273,6 +340,16 @@ Integration testing reads only `.env.test.local` and validates its configured Ne
 4. Open an RFQ, download permitted attachments, enter unit prices, delivery timeline, and notes, then save a draft or submit before the deadline.
 5. Review the vendor's history at `/my-quotations`. Submitted quotations cannot be edited.
 
+## Week 3 Demonstration Checklist
+
+1. As a Procurement Officer, select a submitted quotation and create an approval request; as a Manager, approve or reject it with remarks and review the recorded decision history.
+2. Generate a purchase order from an approved request and verify that only authorized roles can read it.
+3. Generate one invoice from that PO, open its detail page, and verify the persisted line-item snapshots and totals.
+4. Confirm that a linked vendor sees only its own purchase orders and invoices, while a Procurement Officer can view all authorized records.
+5. With valid invoice issuer configuration, download the invoice PDF and use the browser's print flow if a printed copy is required.
+6. With valid issuer and Gmail SMTP configuration, trigger invoice email delivery as a Procurement Officer and confirm the persisted delivery outcome. SMTP acceptance is not proof of inbox delivery.
+7. Disclose the configuration and live-delivery limitations above during a demonstration; do not represent unconfigured or unverified live PDF, printing, or email behavior as demonstrated.
+
 ## Project Status
 
-The Week 1 foundation—authentication, sessions, protected navigation, and vendor records—and the Week 2 RFQ, attachment, quotation, and comparison workflows are implemented. Week 3 approval persistence and later procurement modules are not claimed as complete.
+The Week 1 foundation—authentication, sessions, protected navigation, and vendor records—and the Week 2 RFQ, attachment, quotation, and comparison workflows are implemented. Week 3 adds persisted approvals, purchase orders, invoices, server-side PDF rendering, and configurable invoice-email delivery. The configuration and live-verification limitations documented above still apply.
