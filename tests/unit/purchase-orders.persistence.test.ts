@@ -129,12 +129,14 @@ function listQuery(result: unknown) {
   const chain = {
     from: vi.fn(),
     innerJoin: vi.fn(),
+    leftJoin: vi.fn(),
     orderBy: vi.fn(),
     where: vi.fn(),
   };
 
   chain.from.mockReturnValue(chain);
   chain.innerJoin.mockReturnValue(chain);
+  chain.leftJoin.mockReturnValue(chain);
   chain.where.mockReturnValue(chain);
   chain.orderBy.mockReturnValue(promise);
 

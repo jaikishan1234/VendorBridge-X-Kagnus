@@ -13,7 +13,7 @@ vi.mock("@/components/purchase-orders/purchase-orders-panel", () => ({
   PurchaseOrdersPanel: ({ isProcurement }: { isProcurement: boolean }) => `purchase-orders:${isProcurement}`,
 }));
 vi.mock("@/components/purchase-orders/purchase-order-detail-panel", () => ({
-  PurchaseOrderDetailPanel: ({ poId }: { poId: string }) => `purchase-order:${poId}`,
+  PurchaseOrderDetailPanel: ({ poId, isProcurement }: { poId: string; isProcurement: boolean }) => `purchase-order:${poId}:${isProcurement}`,
 }));
 
 import PurchaseOrderDetailPage from "@/app/purchase-orders/[poId]/page";
@@ -82,5 +82,6 @@ describe("Purchase Order pages", () => {
     const page = await PurchaseOrderDetailPage({ params: Promise.resolve({ poId: "po-1" }) });
 
     expect(JSON.stringify(page)).toContain('"poId":"po-1"');
+    expect(JSON.stringify(page)).toContain('"isProcurement":false');
   });
 });

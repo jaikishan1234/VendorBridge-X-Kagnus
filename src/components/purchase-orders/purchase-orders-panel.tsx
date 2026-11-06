@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 type PurchaseOrderListItem = {
   id: string;
@@ -15,6 +16,7 @@ type PurchaseOrderListItem = {
   rfqNumber: string;
   rfqTitle: string;
   vendorName: string;
+  invoiceId: string | null;
 };
 
 type ApprovedQuotation = {
@@ -57,13 +59,41 @@ async function requestPurchaseOrders(): Promise<PurchaseOrderCollection> {
   };
 }
 
+export function InvoiceGenerationAction({
+  invoiceId,
+  isProcurement,
+  isGenerating,
+  onGenerate,
+  compact = true,
+}: {
+  invoiceId: string | null;
+  isProcurement: boolean;
+  isGenerating: boolean;
+  onGenerate: () => void;
+  compact?: boolean;
+}) {
+  if (!isProcurement) return null;
+  const className = compact
+    ? "h-7 rounded-[4px] border border-[#72a877] bg-[#214829] px-3 text-xs text-[#d8f3d9] disabled:cursor-not-allowed disabled:opacity-60"
+    : "h-9 rounded-[4px] border border-[#72a877] bg-[#214829] px-4 text-sm text-[#d8f3d9] disabled:cursor-not-allowed disabled:opacity-60";
+  if (invoiceId) {
+    return <Link className={compact ? "inline-flex h-7 items-center rounded-[4px] border border-[#8a8a8a] px-3 text-xs text-[#efefef] hover:bg-[#252525]" : "inline-flex h-9 items-center rounded-[4px] border border-[#8a8a8a] px-4 text-sm text-[#efefef] hover:bg-[#252525]"} href={`/invoices/${invoiceId}`}>View Invoice</Link>;
+  }
+  return <button className={className} disabled={isGenerating} onClick={onGenerate} type="button">{isGenerating ? "Generating…" : "Generate Invoice"}</button>;
+}
+
 export function PurchaseOrdersPanel({ isProcurement }: { isProcurement: boolean }) {
+  const router = useRouter();
   const [collection, setCollection] = useState<PurchaseOrderCollection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [generatingApprovalId, setGeneratingApprovalId] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
+  const [generatingInvoicePurchaseOrderId, setGeneratingInvoicePurchaseOrderId] = useState<string | null>(null);
+  const [invoiceGenerationError, setInvoiceGenerationError] = useState<string | null>(null);
+  const [invoiceGenerationSuccess, setInvoiceGenerationSuccess] = useState<string | null>(null);
+  const invoiceGenerationInProgress = useRef(false);
 
   async function loadPurchaseOrders() {
     setIsLoading(true);
@@ -123,6 +153,42 @@ export function PurchaseOrdersPanel({ isProcurement }: { isProcurement: boolean 
     }
   }
 
+  async function generateInvoice(purchaseOrderId: string) {
+    if (invoiceGenerationInProgress.current) return;
+    invoiceGenerationInProgress.current = true;
+    setGeneratingInvoicePurchaseOrderId(purchaseOrderId);
+    setInvoiceGenerationError(null);
+    setInvoiceGenerationSuccess(null);
+
+    try {
+      const response = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ purchaseOrderId }),
+      });
+      const payload = await response.json().catch(() => null) as {
+        message?: string;
+        invoice?: { id?: string };
+      } | null;
+      if (!response.ok || !payload?.invoice?.id) {
+        setInvoiceGenerationError(
+          payload?.message ?? (response.status === 409
+            ? "An invoice has already been generated for this purchase order."
+            : "Unable to generate an invoice."),
+        );
+        return;
+      }
+
+      setInvoiceGenerationSuccess(payload.message ?? "Invoice generated. Opening invoice…");
+      router.push(`/invoices/${payload.invoice.id}`);
+    } catch {
+      setInvoiceGenerationError("Unable to generate an invoice. Please try again.");
+    } finally {
+      invoiceGenerationInProgress.current = false;
+      setGeneratingInvoicePurchaseOrderId(null);
+    }
+  }
+
   const purchaseOrders = collection?.purchaseOrders ?? [];
   const approvedQuotations = collection?.approvedQuotations ?? [];
 
@@ -149,6 +215,8 @@ export function PurchaseOrdersPanel({ isProcurement }: { isProcurement: boolean 
         <>
           {generationError ? <p className="mt-5 rounded-[5px] border border-[#b86d6d] bg-[#2a1717] p-3 text-sm text-[#f2bbbb]" role="alert">{generationError}</p> : null}
           {generationSuccess ? <p className="mt-5 rounded-[5px] border border-[#638d67] bg-[#142418] p-3 text-sm text-[#c8e9ca]" role="status">{generationSuccess}</p> : null}
+          {invoiceGenerationError ? <p className="mt-5 rounded-[5px] border border-[#b86d6d] bg-[#2a1717] p-3 text-sm text-[#f2bbbb]" role="alert">{invoiceGenerationError}</p> : null}
+          {invoiceGenerationSuccess ? <p className="mt-5 rounded-[5px] border border-[#638d67] bg-[#142418] p-3 text-sm text-[#c8e9ca]" role="status">{invoiceGenerationSuccess}</p> : null}
 
           <section aria-labelledby="purchase-orders-heading" className="mt-7">
             <h2 className="text-lg font-medium" id="purchase-orders-heading">Generated Purchase Orders</h2>
@@ -180,7 +248,7 @@ export function PurchaseOrdersPanel({ isProcurement }: { isProcurement: boolean 
                           <td className="px-4 py-3 text-[#d6d6d6]">{label(purchaseOrder.status)}</td>
                           <td className="px-4 py-3 text-[#d6d6d6]">{purchaseOrder.currency} {purchaseOrder.totalAmount}</td>
                           <td className="px-4 py-3 text-[#d6d6d6]">{formatDate(purchaseOrder.generatedAt)}</td>
-                          <td className="px-4 py-3"><Link className="inline-flex h-7 items-center rounded-[4px] border border-[#8a8a8a] px-3 text-xs text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525]" href={`/purchase-orders/${purchaseOrder.id}`}>View</Link></td>
+                          <td className="px-4 py-3"><div className="flex flex-wrap gap-2"><Link className="inline-flex h-7 items-center rounded-[4px] border border-[#8a8a8a] px-3 text-xs text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525]" href={`/purchase-orders/${purchaseOrder.id}`}>View</Link><InvoiceGenerationAction invoiceId={purchaseOrder.invoiceId} isGenerating={generatingInvoicePurchaseOrderId !== null} isProcurement={isProcurement} onGenerate={() => void generateInvoice(purchaseOrder.id)} /></div></td>
                         </tr>
                       ))}
                     </tbody>

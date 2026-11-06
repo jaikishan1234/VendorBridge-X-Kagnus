@@ -3,6 +3,7 @@ import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   approvalRequests,
+  invoices,
   purchaseOrderLineItems,
   purchaseOrders,
   quotationLineItems,
@@ -334,13 +335,15 @@ export async function getPurchaseOrders(vendorId?: string) {
     rfqNumber: rfqs.rfqNumber,
     rfqTitle: rfqs.title,
     vendorName: vendors.vendorName,
+    invoiceId: invoices.id,
   };
 
   const query = db
     .select(selection)
     .from(purchaseOrders)
     .innerJoin(rfqs, eq(purchaseOrders.rfqId, rfqs.id))
-    .innerJoin(vendors, eq(purchaseOrders.vendorId, vendors.id));
+    .innerJoin(vendors, eq(purchaseOrders.vendorId, vendors.id))
+    .leftJoin(invoices, eq(invoices.purchaseOrderId, purchaseOrders.id));
 
   if (vendorId) {
     return query
@@ -403,10 +406,12 @@ export async function getPurchaseOrder(
       rfqNumber: rfqs.rfqNumber,
       rfqTitle: rfqs.title,
       vendorName: vendors.vendorName,
+      invoiceId: invoices.id,
     })
     .from(purchaseOrders)
     .innerJoin(rfqs, eq(purchaseOrders.rfqId, rfqs.id))
     .innerJoin(vendors, eq(purchaseOrders.vendorId, vendors.id))
+    .leftJoin(invoices, eq(invoices.purchaseOrderId, purchaseOrders.id))
     .where(
       vendorId
         ? and(

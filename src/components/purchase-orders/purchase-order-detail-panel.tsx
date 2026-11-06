@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { InvoiceGenerationAction } from "@/components/purchase-orders/purchase-orders-panel";
 
 type PurchaseOrderDetail = {
   id: string;
@@ -14,6 +16,7 @@ type PurchaseOrderDetail = {
   currency: string;
   totalAmount: string;
   generatedAt: string;
+  invoiceId: string | null;
   lineItems: Array<{
     id: string;
     lineNumber: number;
@@ -36,10 +39,15 @@ function label(value: string) {
   return value.charAt(0) + value.slice(1).toLowerCase();
 }
 
-export function PurchaseOrderDetailPanel({ poId }: { poId: string }) {
+export function PurchaseOrderDetailPanel({ poId, isProcurement }: { poId: string; isProcurement: boolean }) {
+  const router = useRouter();
   const [purchaseOrder, setPurchaseOrder] = useState<PurchaseOrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false);
+  const [invoiceGenerationError, setInvoiceGenerationError] = useState<string | null>(null);
+  const [invoiceGenerationSuccess, setInvoiceGenerationSuccess] = useState<string | null>(null);
+  const invoiceGenerationInProgress = useRef(false);
 
   useEffect(() => {
     async function loadPurchaseOrder() {
@@ -62,6 +70,33 @@ export function PurchaseOrderDetailPanel({ poId }: { poId: string }) {
     void loadPurchaseOrder();
   }, [poId]);
 
+  async function generateInvoice() {
+    if (!purchaseOrder || isGeneratingInvoice || purchaseOrder.invoiceId || invoiceGenerationInProgress.current) return;
+    invoiceGenerationInProgress.current = true;
+    setIsGeneratingInvoice(true);
+    setInvoiceGenerationError(null);
+    setInvoiceGenerationSuccess(null);
+    try {
+      const response = await fetch("/api/invoices", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ purchaseOrderId: purchaseOrder.id }),
+      });
+      const payload = await response.json().catch(() => null) as { message?: string; invoice?: { id?: string } } | null;
+      if (!response.ok || !payload?.invoice?.id) {
+        setInvoiceGenerationError(payload?.message ?? (response.status === 409 ? "An invoice has already been generated for this purchase order." : "Unable to generate an invoice."));
+        return;
+      }
+      setInvoiceGenerationSuccess(payload.message ?? "Invoice generated. Opening invoice…");
+      router.push(`/invoices/${payload.invoice.id}`);
+    } catch {
+      setInvoiceGenerationError("Unable to generate an invoice. Please try again.");
+    } finally {
+      invoiceGenerationInProgress.current = false;
+      setIsGeneratingInvoice(false);
+    }
+  }
+
   if (isLoading) {
     return <p className="text-sm text-[#c7c7c7]" role="status">Loading purchase order&hellip;</p>;
   }
@@ -74,6 +109,9 @@ export function PurchaseOrderDetailPanel({ poId }: { poId: string }) {
     <>
       <Link className="text-sm text-[#c7c7c7] underline-offset-4 hover:text-[#efefef] hover:underline" href="/purchase-orders">Back to Purchase Orders</Link>
       <header className="mt-7 rounded-[6px] border border-[#777777] bg-[#151515] p-4 sm:p-5">
+        <div className="mb-5 flex flex-wrap gap-2"><InvoiceGenerationAction compact={false} invoiceId={purchaseOrder.invoiceId} isGenerating={isGeneratingInvoice} isProcurement={isProcurement} onGenerate={() => void generateInvoice()} /></div>
+        {invoiceGenerationError ? <p className="mb-4 rounded-[5px] border border-[#b86d6d] bg-[#2a1717] p-3 text-sm text-[#f2bbbb]" role="alert">{invoiceGenerationError}</p> : null}
+        {invoiceGenerationSuccess ? <p className="mb-4 rounded-[5px] border border-[#638d67] bg-[#142418] p-3 text-sm text-[#c8e9ca]" role="status">{invoiceGenerationSuccess}</p> : null}
         <p className="font-mono text-xs text-[#a8a8a8]">{purchaseOrder.poNumber}</p>
         <h1 className="mt-2 text-2xl font-medium tracking-tight sm:text-3xl">Purchase Order</h1>
         <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
