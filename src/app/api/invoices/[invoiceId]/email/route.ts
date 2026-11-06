@@ -10,6 +10,7 @@ import {
   InvoiceEmailSendInProgressError,
   sendInvoiceEmail,
 } from "@/lib/invoice-email";
+import { InvoiceIssuerConfigurationError } from "@/lib/invoice-pdf";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,13 @@ export async function POST(request: Request, { params }: RouteContext) {
       console.error("Invoice SMTP configuration error:", error.message);
       return NextResponse.json(
         { message: "Invoice email configuration is invalid." },
+        { status: 500 },
+      );
+    }
+    if (error instanceof InvoiceIssuerConfigurationError) {
+      console.error("Invoice PDF configuration error:", error.message);
+      return NextResponse.json(
+        { message: "Invoice PDF configuration is invalid." },
         { status: 500 },
       );
     }

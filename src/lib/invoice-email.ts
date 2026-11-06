@@ -3,7 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { invoiceEmailDeliveries } from "@/db/schema";
 import { getInvoiceDocument } from "@/lib/invoices";
-import { renderInvoicePdf } from "@/lib/invoice-pdf";
+import {
+  InvoiceIssuerConfigurationError,
+  renderInvoicePdf,
+} from "@/lib/invoice-pdf";
 
 const requiredSmtpEnvironmentVariables = [
   "SMTP_HOST",
@@ -125,6 +128,7 @@ export async function sendInvoiceEmail(invoiceId: string) {
       pdf = await renderInvoicePdf(invoice);
     } catch (error) {
       await recordFailedDelivery(invoice.id, invoice.vendor.email, error);
+      if (error instanceof InvoiceIssuerConfigurationError) throw error;
       throw new InvoiceEmailDeliveryFailedError();
     }
 

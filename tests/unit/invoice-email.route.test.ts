@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
   class InvoiceEmailSendInProgressError extends Error {}
   class InvoiceEmailDeliveryFailedError extends Error {}
   class InvoiceEmailAuditPersistenceError extends Error {}
+  class InvoiceIssuerConfigurationError extends Error {}
   return {
     requireRole: vi.fn(),
     sendInvoiceEmail: vi.fn(),
@@ -16,10 +17,14 @@ const mocks = vi.hoisted(() => {
     InvoiceEmailSendInProgressError,
     InvoiceEmailDeliveryFailedError,
     InvoiceEmailAuditPersistenceError,
+    InvoiceIssuerConfigurationError,
   };
 });
 
 vi.mock("@/lib/authorization", () => ({ requireRole: mocks.requireRole }));
+vi.mock("@/lib/invoice-pdf", () => ({
+  InvoiceIssuerConfigurationError: mocks.InvoiceIssuerConfigurationError,
+}));
 vi.mock("@/lib/invoice-email", () => ({
   sendInvoiceEmail: mocks.sendInvoiceEmail,
   InvoiceEmailConfigurationError: mocks.InvoiceEmailConfigurationError,
@@ -107,5 +112,20 @@ describe("POST /api/invoices/[invoiceId]/email", () => {
     const response = await POST(new Request("http://localhost", { method: "POST" }), context());
 
     expect(response.status).toBe(status);
+  });
+
+  it("returns a sanitized 500 for missing issuer PDF configuration", async () => {
+    mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementOfficer });
+    mocks.sendInvoiceEmail.mockRejectedValue(
+      new mocks.InvoiceIssuerConfigurationError("INVOICE_ISSUER_GSTIN is missing"),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const response = await POST(new Request("http://localhost", { method: "POST" }), context());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({
+      message: "Invoice PDF configuration is invalid.",
+    });
   });
 });

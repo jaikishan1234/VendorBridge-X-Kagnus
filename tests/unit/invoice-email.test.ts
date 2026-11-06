@@ -1,18 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  createTransport: vi.fn(),
-  getInvoiceDocument: vi.fn(),
-  renderInvoicePdf: vi.fn(),
-  select: vi.fn(),
-  insert: vi.fn(),
-  eq: vi.fn(),
-  and: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  class InvoiceIssuerConfigurationError extends Error {}
+  return {
+    createTransport: vi.fn(),
+    getInvoiceDocument: vi.fn(),
+    renderInvoicePdf: vi.fn(),
+    select: vi.fn(),
+    insert: vi.fn(),
+    eq: vi.fn(),
+    and: vi.fn(),
+    InvoiceIssuerConfigurationError,
+  };
+});
 
 vi.mock("nodemailer", () => ({ default: { createTransport: mocks.createTransport } }));
 vi.mock("@/lib/invoices", () => ({ getInvoiceDocument: mocks.getInvoiceDocument }));
-vi.mock("@/lib/invoice-pdf", () => ({ renderInvoicePdf: mocks.renderInvoicePdf }));
+vi.mock("@/lib/invoice-pdf", () => ({
+  renderInvoicePdf: mocks.renderInvoicePdf,
+  InvoiceIssuerConfigurationError: mocks.InvoiceIssuerConfigurationError,
+}));
 vi.mock("@/db", () => ({ db: { select: mocks.select, insert: mocks.insert } }));
 vi.mock("drizzle-orm", () => ({
   eq: mocks.eq,
@@ -29,6 +36,7 @@ import {
   InvoiceEmailSendInProgressError,
   sendInvoiceEmail,
 } from "@/lib/invoice-email";
+import { InvoiceIssuerConfigurationError } from "@/lib/invoice-pdf";
 
 const invoice = {
   id: "a1111111-1111-4111-8111-111111111111",
@@ -139,6 +147,20 @@ describe("invoice email service", () => {
     const values = auditInsert();
 
     await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(InvoiceEmailDeliveryFailedError);
+    expect(values).toHaveBeenCalledWith(expect.objectContaining({
+      status: "FAILED",
+      recipientEmail: "registered.vendor@example.com",
+      failureReason: "Invoice email could not be sent.",
+    }));
+    expect(mocks.createTransport).not.toHaveBeenCalled();
+  });
+
+  it("preserves missing issuer configuration after recording FAILED without initializing SMTP", async () => {
+    const issuerError = new InvoiceIssuerConfigurationError("missing issuer fields");
+    mocks.renderInvoicePdf.mockRejectedValue(issuerError);
+    const values = auditInsert();
+
+    await expect(sendInvoiceEmail(invoice.id)).rejects.toBe(issuerError);
     expect(values).toHaveBeenCalledWith(expect.objectContaining({
       status: "FAILED",
       recipientEmail: "registered.vendor@example.com",
