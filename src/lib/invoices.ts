@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  invoiceEmailDeliveries,
   invoiceLineItems,
   invoices,
   purchaseOrderLineItems,
@@ -313,9 +314,15 @@ export async function getInvoices(vendorId?: string) {
     issuedAt: invoices.issuedAt,
     createdAt: invoices.createdAt,
     updatedAt: invoices.updatedAt,
+    purchaseOrderNumber: purchaseOrders.poNumber,
+    vendorName: vendors.vendorName,
   };
 
-  const query = db.select(selection).from(invoices);
+  const query = db
+    .select(selection)
+    .from(invoices)
+    .innerJoin(purchaseOrders, eq(purchaseOrders.id, invoices.purchaseOrderId))
+    .innerJoin(vendors, eq(vendors.id, invoices.vendorId));
 
   if (vendorId) {
     return query
@@ -342,8 +349,16 @@ export async function getInvoice(invoiceId: string, vendorId?: string) {
       issuedAt: invoices.issuedAt,
       createdAt: invoices.createdAt,
       updatedAt: invoices.updatedAt,
+      purchaseOrderNumber: purchaseOrders.poNumber,
+      vendorName: vendors.vendorName,
+      vendorContactName: vendors.contactName,
+      vendorEmail: vendors.email,
+      vendorPhoneNumber: vendors.phoneNumber,
+      vendorGstNumber: vendors.gstNumber,
     })
     .from(invoices)
+    .innerJoin(purchaseOrders, eq(purchaseOrders.id, invoices.purchaseOrderId))
+    .innerJoin(vendors, eq(vendors.id, invoices.vendorId))
     .where(
       vendorId
         ? and(eq(invoices.id, invoiceId), eq(invoices.vendorId, vendorId))
@@ -372,7 +387,30 @@ export async function getInvoice(invoiceId: string, vendorId?: string) {
     .where(eq(invoiceLineItems.invoiceId, invoice.id))
     .orderBy(asc(invoiceLineItems.lineNumber));
 
-  return { ...invoice, lineItems };
+  return {
+    ...invoice,
+    vendor: {
+      name: invoice.vendorName,
+      contactName: invoice.vendorContactName,
+      email: invoice.vendorEmail,
+      phoneNumber: invoice.vendorPhoneNumber,
+      gstNumber: invoice.vendorGstNumber,
+    },
+    lineItems,
+  };
+}
+
+/** Procurement-only route callers use this for non-sensitive delivery status history. */
+export async function getInvoiceEmailDeliveries(invoiceId: string) {
+  return db
+    .select({
+      id: invoiceEmailDeliveries.id,
+      status: invoiceEmailDeliveries.status,
+      attemptedAt: invoiceEmailDeliveries.attemptedAt,
+    })
+    .from(invoiceEmailDeliveries)
+    .where(eq(invoiceEmailDeliveries.invoiceId, invoiceId))
+    .orderBy(desc(invoiceEmailDeliveries.attemptedAt));
 }
 
 /**

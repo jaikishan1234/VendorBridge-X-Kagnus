@@ -26,6 +26,15 @@ describe("application-shell quotation navigation", () => {
     expect(navigationHref("Purchase Orders", "VENDOR")).toBe("/purchase-orders");
   });
 
+  it("exposes Invoices only to procurement officers and vendors", () => {
+    expect(navigationItemsForRole("PROCUREMENT_OFFICER")).toContain("Invoices");
+    expect(navigationHref("Invoices", "PROCUREMENT_OFFICER")).toBe("/invoices");
+    expect(navigationItemsForRole("VENDOR")).toContain("Invoices");
+    expect(navigationHref("Invoices", "VENDOR")).toBe("/invoices");
+    expect(navigationItemsForRole("MANAGER")).not.toContain("Invoices");
+    expect(navigationItemsForRole("ADMIN")).not.toContain("Invoices");
+  });
+
   it("does not expose the quotations navigation to unsupported roles", () => {
     expect(navigationItemsForRole("MANAGER")).not.toContain("Quotations");
     expect(navigationItemsForRole("MANAGER")).not.toContain("Purchase Orders");

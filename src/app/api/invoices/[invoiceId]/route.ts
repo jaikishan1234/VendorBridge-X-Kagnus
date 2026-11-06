@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getInvoice } from "@/lib/invoices";
+import { getInvoice, getInvoiceEmailDeliveries } from "@/lib/invoices";
 import { getRfqViewer } from "@/lib/rfq-access";
 
 type RouteContext = { params: Promise<{ invoiceId: string }> };
@@ -30,6 +30,11 @@ export async function GET(_request: Request, { params }: RouteContext) {
     );
     if (!invoice) {
       return NextResponse.json({ message: "Invoice not found." }, { status: 404 });
+    }
+
+    if (viewer.kind === "procurement") {
+      const emailDeliveries = await getInvoiceEmailDeliveries(invoice.id);
+      return NextResponse.json({ invoice: { ...invoice, emailDeliveries } });
     }
 
     return NextResponse.json({ invoice });

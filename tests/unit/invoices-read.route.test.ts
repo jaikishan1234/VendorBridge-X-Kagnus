@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getRfqViewer: vi.fn(),
   getInvoices: vi.fn(),
   getInvoice: vi.fn(),
+  getInvoiceEmailDeliveries: vi.fn(),
 }));
 
 vi.mock("@/lib/rfq-access", () => ({ getRfqViewer: mocks.getRfqViewer }));
@@ -12,6 +13,7 @@ vi.mock("@/lib/invoices", () => ({
   generateInvoice: vi.fn(),
   getInvoices: mocks.getInvoices,
   getInvoice: mocks.getInvoice,
+  getInvoiceEmailDeliveries: mocks.getInvoiceEmailDeliveries,
   InvoiceAlreadyExistsError: class extends Error {},
   InvoiceGstRateConfigurationError: class extends Error {},
   InvoicePurchaseOrderNotFoundError: class extends Error {},
@@ -90,12 +92,14 @@ describe("Invoice read routes", () => {
     const invoice = { id: invoiceId, lineItems: [{ id: "line-1", lineTotal: "1.00" }] };
     mocks.getRfqViewer.mockResolvedValue(procurementViewer);
     mocks.getInvoice.mockResolvedValue(invoice);
+    mocks.getInvoiceEmailDeliveries.mockResolvedValue([]);
 
     const response = await getInvoice(new Request("http://localhost"), context());
 
     expect(response.status).toBe(200);
     expect(mocks.getInvoice).toHaveBeenCalledWith(invoiceId, undefined);
-    await expect(response.json()).resolves.toEqual({ invoice });
+    expect(mocks.getInvoiceEmailDeliveries).toHaveBeenCalledWith(invoiceId);
+    await expect(response.json()).resolves.toEqual({ invoice: { ...invoice, emailDeliveries: [] } });
   });
 
   it("scopes vendor detail requests to membership and hides another vendor invoice", async () => {
@@ -106,6 +110,7 @@ describe("Invoice read routes", () => {
 
     expect(response.status).toBe(404);
     expect(mocks.getInvoice).toHaveBeenCalledWith(invoiceId, vendorId);
+    expect(mocks.getInvoiceEmailDeliveries).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toEqual({ message: "Invoice not found." });
   });
 
