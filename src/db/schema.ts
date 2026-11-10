@@ -1,8 +1,10 @@
 import {
+  boolean,
   check,
   foreignKey,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -66,6 +68,28 @@ export const invoiceEmailDeliveryStatusEnum = pgEnum(
   "invoice_email_delivery_status",
   ["SENT", "FAILED"],
 );
+
+export const activityEventTypeEnum = pgEnum("activity_event_type", [
+  "RFQ_CREATED",
+  "RFQ_PUBLISHED",
+  "QUOTATION_SUBMITTED",
+  "APPROVAL_REQUESTED",
+  "APPROVAL_APPROVED",
+  "APPROVAL_REJECTED",
+  "PURCHASE_ORDER_GENERATED",
+  "INVOICE_GENERATED",
+  "INVOICE_EMAIL_SENT",
+  "INVOICE_EMAIL_FAILED",
+]);
+
+export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
+  "RFQ",
+  "QUOTATION",
+  "APPROVAL_REQUEST",
+  "VENDOR",
+  "PURCHASE_ORDER",
+  "INVOICE",
+]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -760,3 +784,127 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
     .defaultNow()
     .notNull(),
 });
+
+/**
+ * Append-only procurement audit events. Application code must populate
+ * metadata from server-derived values only; no client input is trusted here.
+ */
+export const activityEvents = pgTable(
+  "activity_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventType: activityEventTypeEnum("event_type").notNull(),
+    actorUserId: uuid("actor_user_id").references(() => users.id),
+    isSystemGenerated: boolean("is_system_generated").default(false).notNull(),
+    affectedEntityType: activityEntityTypeEnum("affected_entity_type").notNull(),
+    affectedEntityId: uuid("affected_entity_id").notNull(),
+    rfqId: uuid("rfq_id").references(() => rfqs.id),
+    quotationId: uuid("quotation_id").references(() => quotations.id),
+    approvalRequestId: uuid("approval_request_id").references(
+      () => approvalRequests.id,
+    ),
+    vendorId: uuid("vendor_id").references(() => vendors.id),
+    purchaseOrderId: uuid("purchase_order_id").references(
+      () => purchaseOrders.id,
+    ),
+    invoiceId: uuid("invoice_id").references(() => invoices.id),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown>>()
+      .default({})
+      .notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("activity_events_entity_occurred_at_idx").on(
+      table.affectedEntityType,
+      table.affectedEntityId,
+      table.occurredAt,
+    ),
+    index("activity_events_actor_occurred_at_idx").on(
+      table.actorUserId,
+      table.occurredAt,
+    ),
+    index("activity_events_rfq_occurred_at_idx").on(
+      table.rfqId,
+      table.occurredAt,
+    ),
+    index("activity_events_vendor_occurred_at_idx").on(
+      table.vendorId,
+      table.occurredAt,
+    ),
+    check(
+      "activity_events_actor_system_consistent",
+      sql`(
+        (${table.isSystemGenerated} = true AND ${table.actorUserId} IS NULL)
+        OR
+        (${table.isSystemGenerated} = false AND ${table.actorUserId} IS NOT NULL)
+      )`,
+    ),
+    check(
+      "activity_events_metadata_object",
+      sql`jsonb_typeof(${table.metadata}) = 'object'`,
+    ),
+    check(
+      "activity_events_affected_entity_consistent",
+      sql`(
+        (${table.eventType} IN ('RFQ_CREATED', 'RFQ_PUBLISHED')
+          AND ${table.affectedEntityType} = 'RFQ'
+          AND ${table.rfqId} IS NOT NULL
+          AND ${table.affectedEntityId} = ${table.rfqId})
+        OR
+        (${table.eventType} = 'QUOTATION_SUBMITTED'
+          AND ${table.affectedEntityType} = 'QUOTATION'
+          AND ${table.quotationId} IS NOT NULL
+          AND ${table.affectedEntityId} = ${table.quotationId})
+        OR
+        (${table.eventType} IN ('APPROVAL_REQUESTED', 'APPROVAL_APPROVED', 'APPROVAL_REJECTED')
+          AND ${table.affectedEntityType} = 'APPROVAL_REQUEST'
+          AND ${table.approvalRequestId} IS NOT NULL
+          AND ${table.affectedEntityId} = ${table.approvalRequestId})
+        OR
+        (${table.eventType} = 'PURCHASE_ORDER_GENERATED'
+          AND ${table.affectedEntityType} = 'PURCHASE_ORDER'
+          AND ${table.purchaseOrderId} IS NOT NULL
+          AND ${table.affectedEntityId} = ${table.purchaseOrderId})
+        OR
+        (${table.eventType} IN ('INVOICE_GENERATED', 'INVOICE_EMAIL_SENT', 'INVOICE_EMAIL_FAILED')
+          AND ${table.affectedEntityType} = 'INVOICE'
+          AND ${table.invoiceId} IS NOT NULL
+          AND ${table.affectedEntityId} = ${table.invoiceId})
+      )`,
+    ),
+  ],
+);
+
+/** A recipient-specific, in-app notification derived from an activity event. */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    activityEventId: uuid("activity_event_id")
+      .notNull()
+      .references(() => activityEvents.id),
+    recipientUserId: uuid("recipient_user_id")
+      .notNull()
+      .references(() => users.id),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("notifications_activity_event_recipient_unique").on(
+      table.activityEventId,
+      table.recipientUserId,
+    ),
+    index("notifications_recipient_created_at_idx").on(
+      table.recipientUserId,
+      table.createdAt,
+    ),
+    index("notifications_recipient_unread_created_at_idx")
+      .on(table.recipientUserId, table.createdAt)
+      .where(sql`${table.readAt} IS NULL`),
+  ],
+);
