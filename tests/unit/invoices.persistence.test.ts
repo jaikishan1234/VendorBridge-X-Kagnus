@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ transaction: vi.fn() }));
 
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 
-import { invoiceLineItems, invoices } from "@/db/schema";
+import { activityEvents, invoiceLineItems, invoices } from "@/db/schema";
 import {
   generateInvoice,
   InvoiceAlreadyExistsError,
@@ -108,6 +108,7 @@ function createTransaction(options: {
   sourceLines?: typeof sourceLineItems;
   headerError?: unknown;
   lineItemError?: unknown;
+  activityEventError?: unknown;
 } = {}) {
   const results = [
     options.purchaseOrderResult ?? [generatedPurchaseOrder],
@@ -120,6 +121,7 @@ function createTransaction(options: {
   const lineItemValues = vi.fn();
   const headerReturning = vi.fn();
   const lineItemReturning = vi.fn();
+  const activityEventValues = vi.fn();
 
   headerValues.mockReturnValue({ returning: headerReturning });
   lineItemValues.mockReturnValue({ returning: lineItemReturning });
@@ -133,10 +135,14 @@ function createTransaction(options: {
       ? Promise.reject(options.lineItemError)
       : Promise.resolve(createdInvoiceLineItems),
   );
+  activityEventValues.mockImplementation(() =>
+    options.activityEventError ? Promise.reject(options.activityEventError) : Promise.resolve(),
+  );
 
   const insert = vi.fn((table) => {
     if (table === invoices) return { values: headerValues };
     if (table === invoiceLineItems) return { values: lineItemValues };
+    if (table === activityEvents) return { values: activityEventValues };
     throw new Error("Unexpected insert table");
   });
 
@@ -145,6 +151,7 @@ function createTransaction(options: {
     lockForUpdate,
     headerValues,
     lineItemValues,
+    activityEventValues,
   };
 }
 
@@ -174,6 +181,7 @@ describe("invoice persistence", () => {
     expect(transaction.headerValues).toHaveBeenCalledWith(expect.objectContaining({
       purchaseOrderId,
       vendorId,
+      generatedByUserId,
       currency: "INR",
       gstRate: "18.0000",
       subtotalAmount: "5.00",
@@ -203,6 +211,16 @@ describe("invoice persistence", () => {
         lineTotal: "4.00",
       }),
     ]);
+    expect(transaction.activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "INVOICE_GENERATED",
+      actorUserId: generatedByUserId,
+      affectedEntityType: "INVOICE",
+      affectedEntityId: invoiceId,
+      vendorId,
+      purchaseOrderId,
+      invoiceId,
+      metadata: {},
+    }));
     expect(invoice).toEqual({ ...createdInvoice, lineItems: createdInvoiceLineItems });
   });
 
@@ -308,5 +326,17 @@ describe("invoice persistence", () => {
     );
     expect(transaction.headerValues).toHaveBeenCalledOnce();
     expect(transaction.lineItemValues).toHaveBeenCalledOnce();
+  });
+
+  it("propagates activity-event insertion failure so the transaction rolls back", async () => {
+    const transaction = createTransaction({ activityEventError: new Error("activity insert failed") });
+    useTransactions(transaction);
+
+    await expect(generateInvoice(purchaseOrderId, generatedByUserId)).rejects.toThrow(
+      "activity insert failed",
+    );
+    expect(transaction.headerValues).toHaveBeenCalledOnce();
+    expect(transaction.lineItemValues).toHaveBeenCalledOnce();
+    expect(transaction.activityEventValues).toHaveBeenCalledOnce();
   });
 });

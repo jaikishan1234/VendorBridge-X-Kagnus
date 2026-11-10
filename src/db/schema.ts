@@ -561,6 +561,7 @@ export const invoices = pgTable(
     invoiceNumber: text("invoice_number").notNull(),
     purchaseOrderId: uuid("purchase_order_id").notNull(),
     vendorId: uuid("vendor_id").notNull(),
+    generatedByUserId: uuid("generated_by_user_id").references(() => users.id),
     status: invoiceStatusEnum("status").default("GENERATED").notNull(),
     currency: text("currency").notNull(),
     subtotalAmount: numeric("subtotal_amount", { precision: 28, scale: 2 }).notNull(),
@@ -697,6 +698,34 @@ export const invoiceEmailDeliveries = pgTable(
         OR
         (${table.status} = 'FAILED' AND ${table.failureReason} IS NOT NULL)
       )`,
+    ),
+  ],
+);
+
+/**
+ * A short-lived, database-backed lease for one external invoice-email send.
+ * This is operational state, not immutable delivery history.
+ */
+export const invoiceEmailDeliveryClaims = pgTable(
+  "invoice_email_delivery_claims",
+  {
+    invoiceId: uuid("invoice_id")
+      .primaryKey()
+      .references(() => invoices.id),
+    claimToken: uuid("claim_token").notNull(),
+    claimedByUserId: uuid("claimed_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    claimedAt: timestamp("claimed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index("invoice_email_delivery_claims_expires_at_idx").on(table.expiresAt),
+    check(
+      "invoice_email_delivery_claims_expiry_after_claim",
+      sql`${table.expiresAt} > ${table.claimedAt}`,
     ),
   ],
 );

@@ -1,0 +1,2 @@
+ALTER TABLE "invoices" ADD COLUMN "generated_by_user_id" uuid;--> statement-breakpoint
+ALTER TABLE "invoices" ADD CONSTRAINT "invoices_generated_by_user_id_users_id_fk" FOREIGN KEY ("generated_by_user_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;

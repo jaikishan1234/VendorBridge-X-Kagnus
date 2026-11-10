@@ -90,7 +90,7 @@ describe("POST /api/invoices/[invoiceId]/email", () => {
     const response = await POST(new Request("http://localhost", { method: "POST" }), context());
 
     expect(response.status).toBe(200);
-    expect(mocks.sendInvoiceEmail).toHaveBeenCalledWith(invoiceId);
+    expect(mocks.sendInvoiceEmail).toHaveBeenCalledWith(invoiceId, procurementOfficer.id);
     await expect(response.json()).resolves.toEqual({
       message: "Invoice email submitted to SMTP.",
       invoiceNumber: "INV-21000101-ABCDEF123456",

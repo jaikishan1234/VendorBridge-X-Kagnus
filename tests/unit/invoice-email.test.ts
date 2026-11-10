@@ -8,8 +8,12 @@ const mocks = vi.hoisted(() => {
     renderInvoicePdf: vi.fn(),
     select: vi.fn(),
     insert: vi.fn(),
+    delete: vi.fn(),
+    transaction: vi.fn(),
     eq: vi.fn(),
     and: vi.fn(),
+    lte: vi.fn(),
+    sql: vi.fn(),
     InvoiceIssuerConfigurationError,
   };
 });
@@ -20,10 +24,19 @@ vi.mock("@/lib/invoice-pdf", () => ({
   renderInvoicePdf: mocks.renderInvoicePdf,
   InvoiceIssuerConfigurationError: mocks.InvoiceIssuerConfigurationError,
 }));
-vi.mock("@/db", () => ({ db: { select: mocks.select, insert: mocks.insert } }));
+vi.mock("@/db", () => ({
+  db: {
+    select: mocks.select,
+    insert: mocks.insert,
+    delete: mocks.delete,
+    transaction: mocks.transaction,
+  },
+}));
 vi.mock("drizzle-orm", () => ({
   eq: mocks.eq,
   and: mocks.and,
+  lte: mocks.lte,
+  sql: mocks.sql,
 }));
 
 import {
@@ -37,9 +50,16 @@ import {
   sendInvoiceEmail,
 } from "@/lib/invoice-email";
 import { InvoiceIssuerConfigurationError } from "@/lib/invoice-pdf";
+import {
+  activityEvents,
+  invoiceEmailDeliveryClaims,
+  invoiceEmailDeliveries,
+} from "@/db/schema";
 
 const invoice = {
   id: "a1111111-1111-4111-8111-111111111111",
+  purchaseOrderId: "c1111111-1111-4111-8111-111111111111",
+  vendorId: "d1111111-1111-4111-8111-111111111111",
   invoiceNumber: "INV-21000101-ABCDEF123456",
   purchaseOrderNumber: "PO-21000101-001",
   vendor: {
@@ -48,6 +68,7 @@ const invoice = {
     email: "registered.vendor@example.com",
   },
 };
+const actorUserId = "b1111111-1111-4111-8111-111111111111";
 
 function configureSmtp() {
   vi.stubEnv("SMTP_HOST", "smtp.gmail.com");
@@ -65,10 +86,66 @@ function sentDeliveryQuery(result: unknown[]) {
   return { from };
 }
 
-function auditInsert(result: unknown = undefined) {
-  const values = vi.fn().mockResolvedValue(result);
-  mocks.insert.mockReturnValue({ values });
-  return values;
+function configureDatabase(options: {
+  sent?: boolean;
+  activeClaim?: "active" | "stale";
+  transactionInsertError?: unknown;
+} = {}) {
+  let sent = options.sent ?? false;
+  let claim: { token: string; stale: boolean } | null = options.activeClaim
+    ? { token: "old-claim-token", stale: options.activeClaim === "stale" }
+    : null;
+  const insertedValues: unknown[] = [];
+  const claimValues = vi.fn();
+  const transactionDeleteWhere = vi.fn();
+  const rootDeleteWhere = vi.fn();
+
+  mocks.select.mockImplementation(() => sentDeliveryQuery(sent ? [{ id: "delivery-id" }] : []));
+  claimValues.mockImplementation((values) => ({
+    onConflictDoUpdate: vi.fn().mockReturnValue({
+      returning: vi.fn().mockImplementation(async () => {
+        if (claim && !claim.stale) return [];
+        claim = { token: values.claimToken, stale: false };
+        return [{ claimToken: values.claimToken }];
+      }),
+    }),
+  }));
+  mocks.insert.mockImplementation((table) => {
+    if (table === invoiceEmailDeliveryClaims) return { values: claimValues };
+    throw new Error("Unexpected root insert table");
+  });
+  rootDeleteWhere.mockImplementation(async () => {
+    claim = null;
+  });
+  mocks.delete.mockImplementation((table) => {
+    if (table === invoiceEmailDeliveryClaims) return { where: rootDeleteWhere };
+    throw new Error("Unexpected root delete table");
+  });
+
+  const txDelete = vi.fn((table) => {
+    if (table !== invoiceEmailDeliveryClaims) throw new Error("Unexpected transaction delete table");
+    return { where: transactionDeleteWhere };
+  });
+  transactionDeleteWhere.mockReturnValue({
+    returning: vi.fn().mockImplementation(async () => {
+      if (!claim) return [];
+      claim = null;
+      return [{ invoiceId: invoice.id }];
+    }),
+  });
+  const txInsert = vi.fn((table) => ({
+    values: vi.fn().mockImplementation(async (values) => {
+      if (options.transactionInsertError) throw options.transactionInsertError;
+      insertedValues.push(values);
+      if (table === invoiceEmailDeliveries && values.status === "SENT") sent = true;
+      if (table !== invoiceEmailDeliveries && table !== activityEvents) {
+        throw new Error("Unexpected transaction insert table");
+      }
+    }),
+  }));
+  mocks.transaction.mockImplementation((callback) => callback({ delete: txDelete, insert: txInsert }));
+
+  return { insertedValues, claimValues, rootDeleteWhere };
 }
 
 beforeEach(() => {
@@ -76,8 +153,10 @@ beforeEach(() => {
   configureSmtp();
   mocks.eq.mockImplementation((left, right) => ({ left, right }));
   mocks.and.mockImplementation((...conditions) => ({ conditions }));
+  mocks.lte.mockImplementation((left, right) => ({ left, right }));
+  mocks.sql.mockImplementation((strings, ...values) => ({ strings, values }));
   mocks.getInvoiceDocument.mockResolvedValue(invoice);
-  mocks.select.mockReturnValue(sentDeliveryQuery([]));
+  configureDatabase();
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -88,9 +167,9 @@ describe("invoice email service", () => {
     const sendMail = vi.fn().mockResolvedValue({ messageId: "provider-message-id" });
     mocks.renderInvoicePdf.mockResolvedValue(pdf);
     mocks.createTransport.mockReturnValue({ sendMail });
-    const values = auditInsert();
+    const { insertedValues } = configureDatabase();
 
-    await expect(sendInvoiceEmail(invoice.id)).resolves.toEqual({
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).resolves.toEqual({
       invoiceNumber: invoice.invoiceNumber,
       recipientEmail: invoice.vendor.email,
     });
@@ -111,43 +190,59 @@ describe("invoice email service", () => {
         contentType: "application/pdf",
       }],
     }));
-    expect(values).toHaveBeenCalledWith({
+    expect(insertedValues).toContainEqual({
       invoiceId: invoice.id,
       recipientEmail: "registered.vendor@example.com",
       status: "SENT",
       failureReason: null,
     });
+    expect(insertedValues).toContainEqual(expect.objectContaining({
+      eventType: "INVOICE_EMAIL_SENT",
+      actorUserId,
+      affectedEntityType: "INVOICE",
+      affectedEntityId: invoice.id,
+      vendorId: invoice.vendorId,
+      purchaseOrderId: invoice.purchaseOrderId,
+      invoiceId: invoice.id,
+      metadata: {},
+    }));
   });
 
   it("fails clearly for missing SMTP configuration and audits the persisted recipient", async () => {
     vi.stubEnv("SMTP_HOST", "");
     mocks.renderInvoicePdf.mockResolvedValue(Buffer.from("%PDF"));
-    const values = auditInsert();
+    const { insertedValues } = configureDatabase();
 
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(InvoiceEmailConfigurationError);
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(InvoiceEmailConfigurationError);
 
-    expect(values).toHaveBeenCalledWith(expect.objectContaining({
+    expect(insertedValues).toContainEqual(expect.objectContaining({
       invoiceId: invoice.id,
       recipientEmail: "registered.vendor@example.com",
       status: "FAILED",
       failureReason: "SMTP configuration is invalid.",
+    }));
+    expect(insertedValues).toContainEqual(expect.objectContaining({
+      eventType: "INVOICE_EMAIL_FAILED",
+      actorUserId,
+      invoiceId: invoice.id,
+      metadata: {},
     }));
   });
 
   it("returns missing invoices without attempting SMTP or audit writes", async () => {
     mocks.getInvoiceDocument.mockResolvedValue(null);
 
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(InvoiceEmailNotFoundError);
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(InvoiceEmailNotFoundError);
     expect(mocks.createTransport).not.toHaveBeenCalled();
     expect(mocks.insert).not.toHaveBeenCalled();
   });
 
   it("records FAILED when PDF rendering fails", async () => {
     mocks.renderInvoicePdf.mockRejectedValue(new Error("issuer data missing"));
-    const values = auditInsert();
+    const { insertedValues } = configureDatabase();
 
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(InvoiceEmailDeliveryFailedError);
-    expect(values).toHaveBeenCalledWith(expect.objectContaining({
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(InvoiceEmailDeliveryFailedError);
+    expect(insertedValues).toContainEqual(expect.objectContaining({
       status: "FAILED",
       recipientEmail: "registered.vendor@example.com",
       failureReason: "Invoice email could not be sent.",
@@ -158,10 +253,10 @@ describe("invoice email service", () => {
   it("preserves missing issuer configuration after recording FAILED without initializing SMTP", async () => {
     const issuerError = new InvoiceIssuerConfigurationError("missing issuer fields");
     mocks.renderInvoicePdf.mockRejectedValue(issuerError);
-    const values = auditInsert();
+    const { insertedValues } = configureDatabase();
 
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBe(issuerError);
-    expect(values).toHaveBeenCalledWith(expect.objectContaining({
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBe(issuerError);
+    expect(insertedValues).toContainEqual(expect.objectContaining({
       status: "FAILED",
       recipientEmail: "registered.vendor@example.com",
       failureReason: "Invoice email could not be sent.",
@@ -172,10 +267,10 @@ describe("invoice email service", () => {
   it("records FAILED when SMTP rejects the submission", async () => {
     mocks.renderInvoicePdf.mockResolvedValue(Buffer.from("%PDF"));
     mocks.createTransport.mockReturnValue({ sendMail: vi.fn().mockRejectedValue(new Error("SMTP rejected")) });
-    const values = auditInsert();
+    const { insertedValues } = configureDatabase();
 
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(InvoiceEmailDeliveryFailedError);
-    expect(values).toHaveBeenCalledWith(expect.objectContaining({
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(InvoiceEmailDeliveryFailedError);
+    expect(insertedValues).toContainEqual(expect.objectContaining({
       status: "FAILED",
       recipientEmail: "registered.vendor@example.com",
       failureReason: "Invoice email could not be sent.",
@@ -183,38 +278,110 @@ describe("invoice email service", () => {
   });
 
   it("rejects a previously sent invoice before generating another PDF", async () => {
-    mocks.select.mockReturnValue(sentDeliveryQuery([{ id: "delivery-id" }]));
+    configureDatabase({ sent: true });
 
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(InvoiceEmailAlreadySentError);
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(InvoiceEmailAlreadySentError);
     expect(mocks.renderInvoicePdf).not.toHaveBeenCalled();
     expect(mocks.createTransport).not.toHaveBeenCalled();
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+
+  it("serializes independent database claims so exactly one request sends and records SENT", async () => {
+    const { insertedValues } = configureDatabase();
+    let resolvePdf: ((value: Buffer) => void) | undefined;
+    let renderingStarted!: () => void;
+    const renderingStartedPromise = new Promise<void>((resolve) => { renderingStarted = resolve; });
+    mocks.renderInvoicePdf.mockReturnValue(
+      new Promise<Buffer>((resolve) => {
+        renderingStarted();
+        resolvePdf = resolve;
+      }),
+    );
+    const sendMail = vi.fn().mockResolvedValue({});
+    mocks.createTransport.mockReturnValue({ sendMail });
+
+    const first = sendInvoiceEmail(invoice.id, actorUserId);
+    await renderingStartedPromise;
+    const second = sendInvoiceEmail(invoice.id, actorUserId);
+
+    resolvePdf?.(Buffer.from("%PDF"));
+    await expect(first).resolves.toEqual(expect.objectContaining({ invoiceNumber: invoice.invoiceNumber }));
+    await expect(second).rejects.toBeInstanceOf(InvoiceEmailSendInProgressError);
+
+    expect(sendMail).toHaveBeenCalledOnce();
+    expect(
+      insertedValues.filter(
+        (value) =>
+          typeof value === "object" &&
+          value !== null &&
+          "eventType" in value &&
+          value.eventType === "INVOICE_EMAIL_SENT",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("permits a later claim to retry after a recorded FAILED delivery", async () => {
+    const { insertedValues } = configureDatabase();
+    mocks.renderInvoicePdf.mockResolvedValue(Buffer.from("%PDF"));
+    const sendMail = vi.fn()
+      .mockRejectedValueOnce(new Error("SMTP rejected"))
+      .mockResolvedValueOnce({});
+    mocks.createTransport.mockReturnValue({ sendMail });
+
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(
+      InvoiceEmailDeliveryFailedError,
+    );
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).resolves.toEqual(
+      expect.objectContaining({ invoiceNumber: invoice.invoiceNumber }),
+    );
+
+    expect(sendMail).toHaveBeenCalledTimes(2);
+    expect(
+      insertedValues.filter(
+        (value) =>
+          typeof value === "object" &&
+          value !== null &&
+          "eventType" in value &&
+          value.eventType === "INVOICE_EMAIL_FAILED",
+      ),
+    ).toHaveLength(1);
+    expect(
+      insertedValues.filter(
+        (value) =>
+          typeof value === "object" &&
+          value !== null &&
+          "eventType" in value &&
+          value.eventType === "INVOICE_EMAIL_SENT",
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("reclaims an expired database lease so a later request can recover from a stale owner", async () => {
+    const { claimValues } = configureDatabase({ activeClaim: "stale" });
+    mocks.renderInvoicePdf.mockResolvedValue(Buffer.from("%PDF"));
+    const sendMail = vi.fn().mockResolvedValue({});
+    mocks.createTransport.mockReturnValue({ sendMail });
+
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).resolves.toEqual(
+      expect.objectContaining({ invoiceNumber: invoice.invoiceNumber }),
+    );
+
+    expect(claimValues).toHaveBeenCalledOnce();
+    expect(sendMail).toHaveBeenCalledOnce();
   });
 
   it("does not report success if the SENT audit cannot be persisted", async () => {
     mocks.renderInvoicePdf.mockResolvedValue(Buffer.from("%PDF"));
     mocks.createTransport.mockReturnValue({ sendMail: vi.fn().mockResolvedValue({}) });
-    const values = vi.fn().mockRejectedValue(new Error("database unavailable"));
-    mocks.insert.mockReturnValue({ values });
+    const { rootDeleteWhere } = configureDatabase({
+      transactionInsertError: new Error("database unavailable"),
+    });
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(
       InvoiceEmailAuditPersistenceError,
     );
-  });
-
-  it("rejects a repeated in-flight request without a second SMTP submission", async () => {
-    let resolvePdf: ((value: Buffer) => void) | undefined;
-    mocks.renderInvoicePdf.mockReturnValue(new Promise<Buffer>((resolve) => { resolvePdf = resolve; }));
-    mocks.createTransport.mockReturnValue({ sendMail: vi.fn().mockResolvedValue({}) });
-    auditInsert();
-
-    const first = sendInvoiceEmail(invoice.id);
-    await expect(sendInvoiceEmail(invoice.id)).rejects.toBeInstanceOf(
-      InvoiceEmailSendInProgressError,
-    );
-    resolvePdf?.(Buffer.from("%PDF"));
-    await expect(first).resolves.toBeDefined();
-    expect(mocks.createTransport).toHaveBeenCalledOnce();
+    expect(rootDeleteWhere).toHaveBeenCalledOnce();
   });
 
   it("validates SMTP port and TLS values", () => {

@@ -38,7 +38,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   try {
-    const delivery = await sendInvoiceEmail(invoiceId);
+    const delivery = await sendInvoiceEmail(invoiceId, authorization.user.id);
     return NextResponse.json({
       message: "Invoice email submitted to SMTP.",
       invoiceNumber: delivery.invoiceNumber,

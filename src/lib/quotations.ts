@@ -1,6 +1,12 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { quotationLineItems, quotations, rfqLineItems, rfqs } from "@/db/schema";
+import {
+  activityEvents,
+  quotationLineItems,
+  quotations,
+  rfqLineItems,
+  rfqs,
+} from "@/db/schema";
 import type { VendorQuotationAccess } from "@/lib/quotation-access";
 import type {
   QuotationDraftInput,
@@ -186,15 +192,29 @@ async function persistDraft(
 
     if (!submit) return { id: quotation.id, status: "DRAFT" as const };
 
+    const submittedAt = new Date();
     const [submitted] = await tx
       .update(quotations)
-      .set({ status: "SUBMITTED", submittedAt: new Date(), updatedAt: new Date() })
+      .set({ status: "SUBMITTED", submittedAt, updatedAt: submittedAt })
       .where(and(eq(quotations.id, quotation.id), eq(quotations.status, "DRAFT")))
       .returning({ id: quotations.id });
 
     if (!submitted) {
       throw new QuotationConflictError("The quotation was submitted concurrently.");
     }
+
+    await tx.insert(activityEvents).values({
+      eventType: "QUOTATION_SUBMITTED",
+      actorUserId: access.userId,
+      isSystemGenerated: false,
+      affectedEntityType: "QUOTATION",
+      affectedEntityId: submitted.id,
+      rfqId: access.rfq.id,
+      quotationId: submitted.id,
+      vendorId: access.vendorId,
+      metadata: {},
+      occurredAt: submittedAt,
+    });
 
     return { id: submitted.id, status: "SUBMITTED" as const };
   });

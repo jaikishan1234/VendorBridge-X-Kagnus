@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { rfqLineItems, rfqVendorAssignments, rfqs } from "@/db/schema";
+import { activityEvents, rfqLineItems, rfqVendorAssignments, rfqs } from "@/db/schema";
 import { requireRole } from "@/lib/authorization";
 
 class RfqNotFoundError extends Error {}
@@ -22,7 +22,7 @@ function hasRequiredRfqDetails(rfq: {
   );
 }
 
-async function publishRfq(rfqId: string) {
+async function publishRfq(rfqId: string, actorUserId: string) {
   return db.transaction(async (tx) => {
     // Lock the RFQ so that a concurrent publish or lifecycle update cannot
     // validate an outdated status and silently open the same draft twice.
@@ -59,13 +59,25 @@ async function publishRfq(rfqId: string) {
 
     if (!lineItem || !assignment) throw new RfqNotPublishableError();
 
+    const occurredAt = new Date();
     const [published] = await tx
       .update(rfqs)
-      .set({ status: "OPEN", updatedAt: new Date() })
+      .set({ status: "OPEN", updatedAt: occurredAt })
       .where(and(eq(rfqs.id, rfq.id), eq(rfqs.status, "DRAFT")))
       .returning({ id: rfqs.id, status: rfqs.status });
 
     if (!published) throw new RfqNotPublishableError();
+
+    await tx.insert(activityEvents).values({
+      eventType: "RFQ_PUBLISHED",
+      actorUserId,
+      isSystemGenerated: false,
+      affectedEntityType: "RFQ",
+      affectedEntityId: published.id,
+      rfqId: published.id,
+      metadata: {},
+      occurredAt,
+    });
 
     return published;
   });
@@ -88,7 +100,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
   }
 
   try {
-    const rfq = await publishRfq(rfqId);
+    const rfq = await publishRfq(rfqId, authorization.user.id);
     return NextResponse.json({ message: "RFQ published.", rfq });
   } catch (error) {
     if (error instanceof RfqNotFoundError) {

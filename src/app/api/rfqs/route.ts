@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { rfqLineItems, rfqVendorAssignments, rfqs, vendors } from "@/db/schema";
+import {
+  activityEvents,
+  rfqLineItems,
+  rfqVendorAssignments,
+  rfqs,
+  vendors,
+} from "@/db/schema";
 import { requireRole } from "@/lib/authorization";
 import { createRfqSchema, type CreateRfqValues } from "@/lib/validations/rfq";
 
@@ -73,6 +79,17 @@ async function createRfq(
             vendorId,
           })),
         );
+
+        await tx.insert(activityEvents).values({
+          eventType: "RFQ_CREATED",
+          actorUserId: createdByUserId,
+          isSystemGenerated: false,
+          affectedEntityType: "RFQ",
+          affectedEntityId: rfq.id,
+          rfqId: rfq.id,
+          metadata: {},
+          occurredAt: new Date(),
+        });
 
         return rfq;
       });

@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ transaction: vi.fn(), select: vi.fn() }));
 
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction, select: mocks.select } }));
 
-import { purchaseOrderLineItems, purchaseOrders } from "@/db/schema";
+import { activityEvents, purchaseOrderLineItems, purchaseOrders } from "@/db/schema";
 import {
   generatePurchaseOrder,
   getPurchaseOrders,
@@ -151,6 +151,7 @@ function createTransaction(options: {
   quotedLineItems?: typeof quotedLineItems;
   headerError?: unknown;
   lineItemError?: unknown;
+  activityEventError?: unknown;
 } = {}) {
   const results = [
     options.approval === undefined ? [approvedApproval] : [options.approval],
@@ -165,6 +166,7 @@ function createTransaction(options: {
   const lineItemValues = vi.fn();
   const headerReturning = vi.fn();
   const lineItemReturning = vi.fn();
+  const activityEventValues = vi.fn();
 
   headerValues.mockReturnValue({ returning: headerReturning });
   lineItemValues.mockReturnValue({ returning: lineItemReturning });
@@ -178,10 +180,14 @@ function createTransaction(options: {
       ? Promise.reject(options.lineItemError)
       : Promise.resolve(createdLineItems),
   );
+  activityEventValues.mockImplementation(() =>
+    options.activityEventError ? Promise.reject(options.activityEventError) : Promise.resolve(),
+  );
 
   const insert = vi.fn((table) => {
     if (table === purchaseOrders) return { values: headerValues };
     if (table === purchaseOrderLineItems) return { values: lineItemValues };
+    if (table === activityEvents) return { values: activityEventValues };
     throw new Error("Unexpected insert table");
   });
 
@@ -190,6 +196,7 @@ function createTransaction(options: {
     lockForUpdate,
     headerValues,
     lineItemValues,
+    activityEventValues,
   };
 }
 
@@ -249,6 +256,18 @@ describe("purchase order persistence", () => {
         lineTotal: "2.00",
       }),
     ]);
+    expect(transaction.activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "PURCHASE_ORDER_GENERATED",
+      actorUserId: generatedByUserId,
+      affectedEntityType: "PURCHASE_ORDER",
+      affectedEntityId: purchaseOrderId,
+      rfqId,
+      quotationId,
+      approvalRequestId: approvalId,
+      vendorId,
+      purchaseOrderId,
+      metadata: {},
+    }));
     expect(purchaseOrder).toEqual({ ...createdPurchaseOrder, lineItems: createdLineItems });
   });
 
@@ -352,5 +371,17 @@ describe("purchase order persistence", () => {
     );
     expect(transaction.headerValues).toHaveBeenCalledOnce();
     expect(transaction.lineItemValues).toHaveBeenCalledOnce();
+  });
+
+  it("propagates activity-event insertion failure so the transaction rolls back", async () => {
+    const transaction = createTransaction({ activityEventError: new Error("activity insert failed") });
+    useTransactions(transaction);
+
+    await expect(generatePurchaseOrder(approvalId, generatedByUserId)).rejects.toThrow(
+      "activity insert failed",
+    );
+    expect(transaction.headerValues).toHaveBeenCalledOnce();
+    expect(transaction.lineItemValues).toHaveBeenCalledOnce();
+    expect(transaction.activityEventValues).toHaveBeenCalledOnce();
   });
 });

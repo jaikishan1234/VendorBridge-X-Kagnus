@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   approvalHistory,
   approvalRequests,
+  activityEvents,
   quotationLineItems,
   quotations,
   rfqLineItems,
@@ -95,6 +96,20 @@ export async function createApprovalRequest(
       occurredAt: selectedAt,
     });
 
+    await tx.insert(activityEvents).values({
+      eventType: "APPROVAL_REQUESTED",
+      actorUserId: selectedByUserId,
+      isSystemGenerated: false,
+      affectedEntityType: "APPROVAL_REQUEST",
+      affectedEntityId: approval.id,
+      rfqId: quotation.rfqId,
+      quotationId: quotation.id,
+      approvalRequestId: approval.id,
+      vendorId: quotation.vendorId,
+      metadata: {},
+      occurredAt: selectedAt,
+    });
+
     return approval;
   });
 }
@@ -106,7 +121,13 @@ export async function decideApproval(
 ) {
   return db.transaction(async (tx) => {
     const [approval] = await tx
-      .select({ id: approvalRequests.id, status: approvalRequests.status })
+      .select({
+        id: approvalRequests.id,
+        status: approvalRequests.status,
+        quotationId: approvalRequests.quotationId,
+        rfqId: approvalRequests.rfqId,
+        vendorId: approvalRequests.vendorId,
+      })
       .from(approvalRequests)
       .where(eq(approvalRequests.id, approvalId))
       .for("update")
@@ -141,6 +162,20 @@ export async function decideApproval(
       actorUserId: managerUserId,
       action: status,
       remarks: input.remarks,
+      occurredAt: decidedAt,
+    });
+
+    await tx.insert(activityEvents).values({
+      eventType: status === "APPROVED" ? "APPROVAL_APPROVED" : "APPROVAL_REJECTED",
+      actorUserId: managerUserId,
+      isSystemGenerated: false,
+      affectedEntityType: "APPROVAL_REQUEST",
+      affectedEntityId: approval.id,
+      rfqId: approval.rfqId,
+      quotationId: approval.quotationId,
+      approvalRequestId: approval.id,
+      vendorId: approval.vendorId,
+      metadata: {},
       occurredAt: decidedAt,
     });
 

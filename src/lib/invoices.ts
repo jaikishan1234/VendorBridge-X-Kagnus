@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activityEvents,
   invoiceEmailDeliveries,
   invoiceLineItems,
   invoices,
@@ -155,7 +156,11 @@ function isDuplicateInvoiceConflict(error: unknown): boolean {
   return hasConstraint(error, "invoices_purchase_order_id_unique");
 }
 
-async function createInvoice(purchaseOrderId: string, gstRate: GstRate) {
+async function createInvoice(
+  purchaseOrderId: string,
+  generatedByUserId: string,
+  gstRate: GstRate,
+) {
   return db.transaction(async (tx) => {
     const [purchaseOrder] = await tx
       .select({
@@ -210,6 +215,7 @@ async function createInvoice(purchaseOrderId: string, gstRate: GstRate) {
         invoiceNumber: generateInvoiceNumber(issuedAt),
         purchaseOrderId: purchaseOrder.id,
         vendorId: purchaseOrder.vendorId,
+        generatedByUserId,
         currency: purchaseOrder.currency,
         subtotalAmount: totals.subtotalAmount,
         gstRate: gstRate.value,
@@ -224,6 +230,7 @@ async function createInvoice(purchaseOrderId: string, gstRate: GstRate) {
         invoiceNumber: invoices.invoiceNumber,
         purchaseOrderId: invoices.purchaseOrderId,
         vendorId: invoices.vendorId,
+        generatedByUserId: invoices.generatedByUserId,
         status: invoices.status,
         currency: invoices.currency,
         subtotalAmount: invoices.subtotalAmount,
@@ -267,6 +274,19 @@ async function createInvoice(purchaseOrderId: string, gstRate: GstRate) {
         updatedAt: invoiceLineItems.updatedAt,
       });
 
+    await tx.insert(activityEvents).values({
+      eventType: "INVOICE_GENERATED",
+      actorUserId: generatedByUserId,
+      isSystemGenerated: false,
+      affectedEntityType: "INVOICE",
+      affectedEntityId: invoice.id,
+      vendorId: invoice.vendorId,
+      purchaseOrderId: invoice.purchaseOrderId,
+      invoiceId: invoice.id,
+      metadata: {},
+      occurredAt: issuedAt,
+    });
+
     return { ...invoice, lineItems };
   });
 }
@@ -275,14 +295,11 @@ export async function generateInvoice(
   purchaseOrderId: string,
   generatedByUserId: string,
 ) {
-  // The applied invoice schema does not include generated_by_user_id. Keep the
-  // authenticated server-side identity in the domain API for future auditing.
-  void generatedByUserId;
   const gstRate = readGstRate();
 
   for (let attempt = 0; attempt < maximumInvoiceNumberAttempts; attempt += 1) {
     try {
-      return await createInvoice(purchaseOrderId, gstRate);
+      return await createInvoice(purchaseOrderId, generatedByUserId, gstRate);
     } catch (error) {
       if (isDuplicateInvoiceConflict(error)) {
         throw new InvoiceAlreadyExistsError();

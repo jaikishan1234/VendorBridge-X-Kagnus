@@ -10,6 +10,7 @@ export type VendorQuotationAccess =
   | { kind: "not-found" }
   | {
       kind: "vendor";
+      userId: string;
       vendorId: string;
       rfq: {
         id: string;
@@ -55,5 +56,5 @@ export async function getVendorQuotationAccess(
 
   if (!rfq) return { kind: "not-found" };
 
-  return { kind: "vendor", vendorId: viewer.vendorId, rfq };
+  return { kind: "vendor", userId: viewer.user.id, vendorId: viewer.vendorId, rfq };
 }

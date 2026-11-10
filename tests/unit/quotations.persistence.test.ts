@@ -15,13 +15,14 @@ const mocks = vi.hoisted(() => ({
   quotationValues: vi.fn(),
   quotationOnConflict: vi.fn(),
   quotationReturning: vi.fn(),
+  activityEventValues: vi.fn(),
 }));
 
 vi.mock("@/db", () => ({
   db: { transaction: mocks.transaction },
 }));
 
-import { quotationLineItems, quotations } from "@/db/schema";
+import { activityEvents, quotationLineItems, quotations } from "@/db/schema";
 import {
   QuotationConflictError,
   QuotationDeadlinePassedError,
@@ -37,6 +38,7 @@ const quotationId = "d1111111-1111-4111-8111-111111111111";
 
 const access = {
   kind: "vendor" as const,
+  userId: "e1111111-1111-4111-8111-111111111111",
   vendorId,
   rfq: {
     id: rfqId,
@@ -89,9 +91,11 @@ function configureTransaction(options: {
   mocks.quotationOnConflict.mockReturnValue({ returning: mocks.quotationReturning });
   mocks.quotationValues.mockReturnValue({ onConflictDoNothing: mocks.quotationOnConflict });
   mocks.lineItemValues.mockResolvedValue(undefined);
+  mocks.activityEventValues.mockResolvedValue(undefined);
   mocks.txInsert.mockImplementation((table) => {
     if (table === quotations) return { values: mocks.quotationValues };
     if (table === quotationLineItems) return { values: mocks.lineItemValues };
+    if (table === activityEvents) return { values: mocks.activityEventValues };
     throw new Error("Unexpected insert table");
   });
 
@@ -185,5 +189,25 @@ describe("quotation persistence lifecycle boundary", () => {
     );
     expect(mocks.txDelete).not.toHaveBeenCalled();
     expect(mocks.lineItemValues).not.toHaveBeenCalled();
+  });
+
+  it("records a quotation-submitted activity event from authoritative vendor access", async () => {
+    configureTransaction({ updateResults: [[{ id: quotationId }], [{ id: quotationId }]] });
+
+    await expect(submitVendorQuotation(access, { lineItems })).resolves.toEqual({
+      id: quotationId,
+      status: "SUBMITTED",
+    });
+
+    expect(mocks.activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "QUOTATION_SUBMITTED",
+      actorUserId: access.userId,
+      affectedEntityType: "QUOTATION",
+      affectedEntityId: quotationId,
+      rfqId,
+      quotationId,
+      vendorId,
+      metadata: {},
+    }));
   });
 });

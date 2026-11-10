@@ -10,7 +10,7 @@ import {
   decideApproval,
   InvalidApprovalTransitionError,
 } from "@/lib/approvals";
-import { approvalHistory, approvalRequests } from "@/db/schema";
+import { activityEvents, approvalHistory, approvalRequests } from "@/db/schema";
 
 const rfqId = "a1111111-1111-4111-8111-111111111111";
 const quotationId = "b1111111-1111-4111-8111-111111111111";
@@ -35,6 +35,7 @@ describe("approval persistence", () => {
       returning: vi.fn().mockResolvedValue([{ id: approvalId, status: "PENDING" }]),
     });
     const historyValues = vi.fn().mockResolvedValue([]);
+    const activityEventValues = vi.fn().mockResolvedValue([]);
     const tx = {
       select: vi.fn()
         .mockReturnValueOnce(selectResult([{ id: rfqId }]))
@@ -43,7 +44,8 @@ describe("approval persistence", () => {
         .mockReturnValueOnce(selectResult([])),
       insert: vi.fn()
         .mockReturnValueOnce({ values: approvalValues })
-        .mockReturnValueOnce({ values: historyValues }),
+        .mockReturnValueOnce({ values: historyValues })
+        .mockReturnValueOnce({ values: activityEventValues }),
     };
     mocks.transaction.mockImplementation((callback: (value: typeof tx) => unknown) => callback(tx));
 
@@ -54,10 +56,22 @@ describe("approval persistence", () => {
 
     expect(tx.insert).toHaveBeenNthCalledWith(1, approvalRequests);
     expect(tx.insert).toHaveBeenNthCalledWith(2, approvalHistory);
+    expect(tx.insert).toHaveBeenNthCalledWith(3, activityEvents);
     expect(historyValues).toHaveBeenCalledWith(expect.objectContaining({
       approvalRequestId: approvalId,
       actorUserId: userId,
       action: "SUBMITTED",
+    }));
+    expect(activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "APPROVAL_REQUESTED",
+      actorUserId: userId,
+      affectedEntityType: "APPROVAL_REQUEST",
+      affectedEntityId: approvalId,
+      rfqId,
+      quotationId,
+      approvalRequestId: approvalId,
+      vendorId,
+      metadata: {},
     }));
   });
 
@@ -78,8 +92,15 @@ describe("approval persistence", () => {
 
   it("records a manager decision and its history event in the same transaction", async () => {
     const historyValues = vi.fn().mockResolvedValue([]);
+    const activityEventValues = vi.fn().mockResolvedValue([]);
     const tx = {
-      select: vi.fn().mockReturnValue(selectResult([{ id: approvalId, status: "PENDING" }])),
+      select: vi.fn().mockReturnValue(selectResult([{
+        id: approvalId,
+        status: "PENDING",
+        quotationId,
+        rfqId,
+        vendorId,
+      }])),
       update: vi.fn().mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
@@ -87,7 +108,9 @@ describe("approval persistence", () => {
           }),
         }),
       }),
-      insert: vi.fn().mockReturnValue({ values: historyValues }),
+      insert: vi.fn()
+        .mockReturnValueOnce({ values: historyValues })
+        .mockReturnValueOnce({ values: activityEventValues }),
     };
     mocks.transaction.mockImplementation((callback: (value: typeof tx) => unknown) => callback(tx));
 
@@ -95,12 +118,24 @@ describe("approval persistence", () => {
       id: approvalId,
       status: "APPROVED",
     });
-    expect(tx.insert).toHaveBeenCalledWith(approvalHistory);
+    expect(tx.insert).toHaveBeenNthCalledWith(1, approvalHistory);
+    expect(tx.insert).toHaveBeenNthCalledWith(2, activityEvents);
     expect(historyValues).toHaveBeenCalledWith(expect.objectContaining({
       approvalRequestId: approvalId,
       actorUserId: userId,
       action: "APPROVED",
       remarks: "Approved.",
+    }));
+    expect(activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "APPROVAL_APPROVED",
+      actorUserId: userId,
+      affectedEntityType: "APPROVAL_REQUEST",
+      affectedEntityId: approvalId,
+      rfqId,
+      quotationId,
+      approvalRequestId: approvalId,
+      vendorId,
+      metadata: {},
     }));
   });
 
@@ -118,5 +153,46 @@ describe("approval persistence", () => {
 
     await expect(decideApproval(approvalId, userId, { action: "REJECT", remarks: "Rejected." })).rejects.toBeInstanceOf(InvalidApprovalTransitionError);
     expect(tx.insert).not.toHaveBeenCalled();
+  });
+
+  it("records a rejected manager decision as an approval-rejected activity event", async () => {
+    const historyValues = vi.fn().mockResolvedValue([]);
+    const activityEventValues = vi.fn().mockResolvedValue([]);
+    const tx = {
+      select: vi.fn().mockReturnValue(selectResult([{
+        id: approvalId,
+        status: "PENDING",
+        quotationId,
+        rfqId,
+        vendorId,
+      }])),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([{ id: approvalId, status: "REJECTED" }]),
+          }),
+        }),
+      }),
+      insert: vi.fn()
+        .mockReturnValueOnce({ values: historyValues })
+        .mockReturnValueOnce({ values: activityEventValues }),
+    };
+    mocks.transaction.mockImplementation((callback: (value: typeof tx) => unknown) => callback(tx));
+
+    await expect(decideApproval(approvalId, userId, { action: "REJECT", remarks: "Rejected." })).resolves.toEqual({
+      id: approvalId,
+      status: "REJECTED",
+    });
+    expect(activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "APPROVAL_REJECTED",
+      actorUserId: userId,
+      affectedEntityType: "APPROVAL_REQUEST",
+      affectedEntityId: approvalId,
+      rfqId,
+      quotationId,
+      approvalRequestId: approvalId,
+      vendorId,
+      metadata: {},
+    }));
   });
 });

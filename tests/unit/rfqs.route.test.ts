@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   rfqReturning: vi.fn(),
   lineItemValues: vi.fn(),
   assignmentValues: vi.fn(),
+  activityEventValues: vi.fn(),
   inArray: vi.fn(),
 }));
 
@@ -28,7 +29,7 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 import { POST } from "@/app/api/rfqs/route";
-import { rfqLineItems, rfqVendorAssignments, rfqs } from "@/db/schema";
+import { activityEvents, rfqLineItems, rfqVendorAssignments, rfqs } from "@/db/schema";
 
 const procurementOfficer = {
   id: "a1111111-1111-4111-8111-111111111111",
@@ -75,10 +76,12 @@ function mockTransaction(vendorRows = [{ id: vendorOneId }, { id: vendorTwoId }]
   mocks.rfqValues.mockReturnValue({ returning: mocks.rfqReturning });
   mocks.lineItemValues.mockResolvedValue(undefined);
   mocks.assignmentValues.mockResolvedValue(undefined);
+  mocks.activityEventValues.mockResolvedValue(undefined);
   mocks.txInsert.mockImplementation((table) => {
     if (table === rfqs) return { values: mocks.rfqValues };
     if (table === rfqLineItems) return { values: mocks.lineItemValues };
     if (table === rfqVendorAssignments) return { values: mocks.assignmentValues };
+    if (table === activityEvents) return { values: mocks.activityEventValues };
     throw new Error("Unexpected table insertion");
   });
   mocks.transaction.mockImplementation((callback) =>
@@ -196,6 +199,14 @@ describe("POST /api/rfqs", () => {
       { rfqId: createdRfq.id, vendorId: vendorOneId },
       { rfqId: createdRfq.id, vendorId: vendorTwoId },
     ]);
+    expect(mocks.activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "RFQ_CREATED",
+      actorUserId: procurementOfficer.id,
+      affectedEntityType: "RFQ",
+      affectedEntityId: createdRfq.id,
+      rfqId: createdRfq.id,
+      metadata: {},
+    }));
   });
 
   it("rejects selected vendors that no longer exist without inserting any records", async () => {

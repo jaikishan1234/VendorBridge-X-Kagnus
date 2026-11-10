@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activityEvents,
   approvalRequests,
   invoices,
   purchaseOrderLineItems,
@@ -282,6 +283,21 @@ async function createPurchaseOrder(
         createdAt: purchaseOrderLineItems.createdAt,
         updatedAt: purchaseOrderLineItems.updatedAt,
       });
+
+    await tx.insert(activityEvents).values({
+      eventType: "PURCHASE_ORDER_GENERATED",
+      actorUserId: generatedByUserId,
+      isSystemGenerated: false,
+      affectedEntityType: "PURCHASE_ORDER",
+      affectedEntityId: purchaseOrder.id,
+      rfqId: purchaseOrder.rfqId,
+      quotationId: purchaseOrder.quotationId,
+      approvalRequestId: purchaseOrder.approvalRequestId,
+      vendorId: purchaseOrder.vendorId,
+      purchaseOrderId: purchaseOrder.id,
+      metadata: {},
+      occurredAt: generatedAt,
+    });
 
     return { ...purchaseOrder, lineItems };
   });

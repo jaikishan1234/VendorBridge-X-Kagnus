@@ -9,12 +9,15 @@ const mocks = vi.hoisted(() => ({
   updateWhere: vi.fn(),
   updateReturning: vi.fn(),
   lockFor: vi.fn(),
+  txInsert: vi.fn(),
+  activityEventValues: vi.fn(),
 }));
 
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("@/lib/authorization", () => ({ requireRole: mocks.requireRole }));
 
 import { POST } from "@/app/api/rfqs/[rfqId]/publish/route";
+import { activityEvents } from "@/db/schema";
 
 const rfqId = "a1111111-1111-4111-8111-111111111111";
 const procurementOfficer = {
@@ -81,8 +84,13 @@ function configureTransaction(options: {
   mocks.updateWhere.mockReturnValue({ returning: mocks.updateReturning });
   mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
   mocks.txUpdate.mockReturnValue({ set: mocks.updateSet });
+  mocks.activityEventValues.mockResolvedValue(undefined);
+  mocks.txInsert.mockImplementation((table) => {
+    if (table === activityEvents) return { values: mocks.activityEventValues };
+    throw new Error("Unexpected table insertion");
+  });
   mocks.transaction.mockImplementation((callback) =>
-    callback({ select: mocks.txSelect, update: mocks.txUpdate }),
+    callback({ select: mocks.txSelect, update: mocks.txUpdate, insert: mocks.txInsert }),
   );
 }
 
@@ -115,6 +123,14 @@ describe("POST /api/rfqs/[rfqId]/publish", () => {
     expect(mocks.requireRole).toHaveBeenCalledWith(["PROCUREMENT_OFFICER"]);
     expect(mocks.lockFor).toHaveBeenCalledWith("update");
     expect(mocks.txUpdate).toHaveBeenCalledOnce();
+    expect(mocks.activityEventValues).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: "RFQ_PUBLISHED",
+      actorUserId: procurementOfficer.id,
+      affectedEntityType: "RFQ",
+      affectedEntityId: rfqId,
+      rfqId,
+      metadata: {},
+    }));
   });
 
   it("returns 404 for malformed or missing RFQs", async () => {
