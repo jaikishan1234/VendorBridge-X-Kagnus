@@ -122,11 +122,9 @@ describe("POST /api/auth/register", () => {
     expect(response.status).toBe(201);
     expect(mocks.hashPassword).toHaveBeenCalledWith(validRegistration.password);
     expect(mocks.values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        passwordHash,
-        role: "VENDOR",
-      }),
+      expect.objectContaining({ passwordHash }),
     );
+    expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("role");
     expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("password");
     expect(body).toEqual({
       message: "Registration successful",
@@ -136,24 +134,25 @@ describe("POST /api/auth/register", () => {
     expect(JSON.stringify(body)).not.toContain(passwordHash);
   });
 
-  it("always creates a VENDOR when a client supplies a privileged role", async () => {
-    mockExistingUserLookup([]);
-    mockUserInsert();
-    mocks.hashPassword.mockResolvedValue("argon2id-generated-hash");
+  it.each(["ADMIN", "PROCUREMENT_OFFICER"] as const)(
+    "lets the database assign VENDOR when a client supplies %s",
+    async (role) => {
+      mockExistingUserLookup([]);
+      mockUserInsert();
+      mocks.hashPassword.mockResolvedValue("argon2id-generated-hash");
 
-    const response = await POST(
-      registrationRequest(JSON.stringify({
-        ...validRegistration,
-        role: "PROCUREMENT_OFFICER",
-      })),
-    );
+      const response = await POST(
+        registrationRequest(JSON.stringify({ ...validRegistration, role })),
+      );
 
-    expect(response.status).toBe(201);
-    expect(mocks.values).toHaveBeenCalledWith(
-      expect.objectContaining({ role: "VENDOR" }),
-    );
-    expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("role", "PROCUREMENT_OFFICER");
-  });
+      expect(response.status).toBe(201);
+      await expect(response.json()).resolves.toEqual({
+        message: "Registration successful",
+        user: publicUser,
+      });
+      expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("role");
+    },
+  );
 
   it("returns a generic error without exposing an internal failure", async () => {
     const internalDetail = "database password: should-not-be-disclosed";

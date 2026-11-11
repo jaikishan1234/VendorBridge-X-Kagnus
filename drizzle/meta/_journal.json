@@ -127,6 +127,13 @@
       "when": 1794380450457,
       "tag": "0017_invoice_email_delivery_state_machine",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1794393043814,
+      "tag": "0018_users_role_vendor_default",
+      "breakpoints": true
     }
   ]
 }

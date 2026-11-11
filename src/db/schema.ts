@@ -115,7 +115,7 @@ export const users = pgTable("users", {
   phoneNumber: text("phone_number").notNull(),
   passwordHash: text("password_hash").notNull(),
 
-  role: userRoleEnum("role").notNull(),
+  role: userRoleEnum("role").default("VENDOR").notNull(),
   country: text("country").notNull(),
 
   photoUrl: text("photo_url"),
