@@ -187,8 +187,14 @@ Open [http://localhost:3000](http://localhost:3000). The root route redirects to
 ### Application configuration (`.env.local`)
 
 ```dotenv
-# Required for the application database connection
+# Required for the application runtime database connection.
+# This must authenticate as the restricted application runtime role.
 DATABASE_URL="postgresql://USERNAME:PASSWORD@HOST:PORT/DATABASE?sslmode=require"
+
+# Required only when running development Drizzle migrations. Obtain this URL
+# separately from the DBA; it targets the same database as DATABASE_URL but
+# must authenticate as the privileged migration role.
+DATABASE_MIGRATION_URL="<DBA-provided migration connection URL>"
 
 # Required when using RFQ attachment upload or download
 IMAGEKIT_PUBLIC_KEY="public_key_placeholder"
@@ -196,7 +202,9 @@ IMAGEKIT_PRIVATE_KEY="private_key_placeholder"
 IMAGEKIT_URL_ENDPOINT="https://ik.imagekit.io/your_imagekit_id"
 ```
 
-`DATABASE_URL` is read by the application and the development Drizzle configuration. The three ImageKit settings are read only when attachment operations need them; attachment upload returns a configuration error when they are absent.
+`DATABASE_URL` is read only by the application runtime. `DATABASE_MIGRATION_URL` is required by `drizzle.config.ts` and is used only by development migration commands. They may target the same Neon database, but they must be configured with different PostgreSQL roles: a restricted runtime role and a privileged migration role, respectively. Drizzle does not fall back to `DATABASE_URL` when `DATABASE_MIGRATION_URL` is absent.
+
+`TEST_DATABASE_URL` and `TEST_NEON_BRANCH_ID` remain the isolated integration-test configuration; development migration credentials do not affect that setup. The three ImageKit settings are read only when attachment operations need them; attachment upload returns a configuration error when they are absent.
 
 ### Invoice configuration (server-only)
 
