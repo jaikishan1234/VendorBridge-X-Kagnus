@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { getCurrentUser } from "@/lib/auth";
+import { getDashboardData } from "@/lib/dashboard";
 
 type DashboardPageProps = {
   searchParams: Promise<{ comingSoon?: string | string[] }>;
@@ -19,5 +20,12 @@ export default async function DashboardPage({
   const requestedFeature =
     typeof comingSoon === "string" ? comingSoon : undefined;
 
-  return <DashboardShell requestedFeature={requestedFeature} user={user} />;
+  let dashboard = null;
+  try {
+    dashboard = await getDashboardData(user);
+  } catch (error) {
+    console.error("Unable to load dashboard data", error);
+  }
+
+  return <DashboardShell dashboard={dashboard} requestedFeature={requestedFeature} user={user} />;
 }
