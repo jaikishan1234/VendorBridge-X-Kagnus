@@ -11,12 +11,22 @@ describe("application-shell quotation navigation", () => {
     expect(navigationHref("Quotations", "VENDOR")).toBe("/my-quotations");
     expect(navigationLabel("Quotations", "VENDOR")).toBe("My Quotations");
     expect(navigationItemsForRole("VENDOR")).not.toContain("Approvals");
+    expect(navigationItemsForRole("VENDOR")).not.toContain("Vendors");
   });
 
   it("keeps procurement quotation navigation on the comparison landing page", () => {
     expect(navigationItemsForRole("PROCUREMENT_OFFICER")).toContain("Quotations");
     expect(navigationHref("Quotations", "PROCUREMENT_OFFICER")).toBe("/quotations");
     expect(navigationLabel("Quotations", "PROCUREMENT_OFFICER")).toBe("Quotations");
+  });
+
+  it("connects Activity for authenticated roles and Reports for Procurement Officers", () => {
+    expect(navigationHref("Activity", "VENDOR")).toBe("/activity");
+    expect(navigationHref("Activity", "MANAGER")).toBe("/activity");
+    expect(navigationHref("Reports", "PROCUREMENT_OFFICER")).toBe("/reports");
+    expect(navigationItemsForRole("PROCUREMENT_OFFICER")).toContain("Reports");
+    expect(navigationItemsForRole("VENDOR")).not.toContain("Reports");
+    expect(navigationItemsForRole("MANAGER")).not.toContain("Reports");
   });
 
   it("exposes Purchase Orders only to procurement officers and vendors", () => {
@@ -40,5 +50,7 @@ describe("application-shell quotation navigation", () => {
     expect(navigationItemsForRole("MANAGER")).not.toContain("Purchase Orders");
     expect(navigationItemsForRole("ADMIN")).not.toContain("Purchase Orders");
     expect(navigationHref("Approvals", "MANAGER")).toBe("/approvals");
+    expect(navigationItemsForRole("MANAGER")).toEqual(["Dashboard", "Approvals", "Activity"]);
+    expect(navigationItemsForRole("ADMIN")).toEqual(["Dashboard"]);
   });
 });

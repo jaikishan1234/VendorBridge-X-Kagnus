@@ -69,12 +69,14 @@ export function navigationItemsForRole(role: UserRole) {
   }
 
   if (role === "VENDOR") {
-    return navigationItems.filter((item) => item !== "Approvals" && item !== "Reports");
+    return navigationItems.filter(
+      (item) => item !== "Vendors" && item !== "Approvals" && item !== "Reports",
+    );
   }
 
-  return navigationItems.filter(
-    (item) => item !== "Quotations" && item !== "Purchase Orders" && item !== "Invoices" && item !== "Reports",
-  );
+  if (role === "MANAGER") return ["Dashboard", "Approvals", "Activity"];
+
+  return ["Dashboard"];
 }
 
 export function AppShell({ user, activeItem, children }: AppShellProps) {

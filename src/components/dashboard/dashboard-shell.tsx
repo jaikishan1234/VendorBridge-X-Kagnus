@@ -28,10 +28,6 @@ function formatRole(role: UserRole) {
     .join(" ");
 }
 
-function featureHref(feature: string) {
-  return `/dashboard?comingSoon=${encodeURIComponent(feature)}`;
-}
-
 export function DashboardShell({ user, requestedFeature }: DashboardShellProps) {
   const knownFeature = [
     "RFQs",
@@ -142,24 +138,24 @@ export function DashboardShell({ user, requestedFeature }: DashboardShellProps) 
             </div>
 
             <div className="mt-8 flex flex-col gap-3 border-t border-[#777777] pt-6 sm:flex-row sm:flex-wrap">
-              <Link
+              {user.role === "PROCUREMENT_OFFICER" ? <Link
                 className="inline-flex h-10 items-center justify-center rounded-[5px] border border-[#8a8a8a] px-5 text-sm font-medium text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
-                href={featureHref("RFQs")}
+                href="/rfqs/new"
               >
                 + New RFQ
-              </Link>
-              <Link
+              </Link> : null}
+              {user.role === "PROCUREMENT_OFFICER" ? <Link
                 className="inline-flex h-10 items-center justify-center rounded-[5px] border border-[#8a8a8a] px-5 text-sm font-medium text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
                 href="/vendors/new"
               >
                 Add Vendor
-              </Link>
-              <Link
+              </Link> : null}
+              {user.role === "PROCUREMENT_OFFICER" || user.role === "VENDOR" ? <Link
                 className="inline-flex h-10 items-center justify-center rounded-[5px] border border-[#8a8a8a] px-5 text-sm font-medium text-[#efefef] transition-colors hover:border-[#d4d4d4] hover:bg-[#252525] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d8d8d8]/50"
-                href={featureHref("Invoices")}
+                href="/invoices"
               >
                 View Invoices
-              </Link>
+              </Link> : null}
             </div>
       </section>
     </AppShell>
