@@ -21,7 +21,8 @@ type AppShellProps = {
     | "Purchase Orders"
     | "Invoices"
     | "Activity"
-    | "Notifications";
+    | "Notifications"
+    | "Reports";
   children: ReactNode;
 };
 
@@ -53,6 +54,7 @@ export function navigationHref(item: string, role: UserRole) {
     return "/invoices";
   }
   if (item === "Activity") return "/activity";
+  if (item === "Reports" && role === "PROCUREMENT_OFFICER") return "/reports";
 
   return `/dashboard?comingSoon=${encodeURIComponent(item)}`;
 }
@@ -67,11 +69,11 @@ export function navigationItemsForRole(role: UserRole) {
   }
 
   if (role === "VENDOR") {
-    return navigationItems.filter((item) => item !== "Approvals");
+    return navigationItems.filter((item) => item !== "Approvals" && item !== "Reports");
   }
 
   return navigationItems.filter(
-    (item) => item !== "Quotations" && item !== "Purchase Orders" && item !== "Invoices",
+    (item) => item !== "Quotations" && item !== "Purchase Orders" && item !== "Invoices" && item !== "Reports",
   );
 }
 
