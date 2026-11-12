@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -7,6 +8,7 @@ import {
   rfqLineItems,
   rfqs,
 } from "@/db/schema";
+import { createActivityNotifications, getUserIdsForRole } from "@/lib/notifications";
 import type { VendorQuotationAccess } from "@/lib/quotation-access";
 import type {
   QuotationDraftInput,
@@ -203,7 +205,9 @@ async function persistDraft(
       throw new QuotationConflictError("The quotation was submitted concurrently.");
     }
 
+    const activityEventId = randomUUID();
     await tx.insert(activityEvents).values({
+      id: activityEventId,
       eventType: "QUOTATION_SUBMITTED",
       actorUserId: access.userId,
       isSystemGenerated: false,
@@ -214,6 +218,10 @@ async function persistDraft(
       vendorId: access.vendorId,
       metadata: {},
       occurredAt: submittedAt,
+    });
+    await createActivityNotifications(tx, {
+      activityEventId,
+      recipientUserIds: await getUserIdsForRole(tx, "PROCUREMENT_OFFICER"),
     });
 
     return { id: submitted.id, status: "SUBMITTED" as const };

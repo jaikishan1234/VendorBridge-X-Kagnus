@@ -11,10 +11,14 @@ const mocks = vi.hoisted(() => ({
   lockFor: vi.fn(),
   txInsert: vi.fn(),
   activityEventValues: vi.fn(),
+  createActivityNotifications: vi.fn(),
 }));
 
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
 vi.mock("@/lib/authorization", () => ({ requireRole: mocks.requireRole }));
+vi.mock("@/lib/notifications", () => ({
+  createActivityNotifications: mocks.createActivityNotifications,
+}));
 
 import { POST } from "@/app/api/rfqs/[rfqId]/publish/route";
 import { activityEvents } from "@/db/schema";
@@ -59,6 +63,16 @@ function existenceQuery(found: boolean) {
   };
 }
 
+function vendorMemberQuery() {
+  return {
+    from: vi.fn().mockReturnValue({
+      innerJoin: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    }),
+  };
+}
+
 function configureTransaction(options: {
   rfq?: Parameters<typeof lockQuery>[0] | null;
   lineItem?: boolean;
@@ -80,11 +94,13 @@ function configureTransaction(options: {
     mocks.txSelect.mockReturnValueOnce(existenceQuery(options.lineItem ?? true));
     mocks.txSelect.mockReturnValueOnce(existenceQuery(options.assignment ?? true));
   }
+  mocks.txSelect.mockReturnValue(vendorMemberQuery());
   mocks.updateReturning.mockResolvedValue(options.updateResult ?? [{ id: rfqId, status: "OPEN" }]);
   mocks.updateWhere.mockReturnValue({ returning: mocks.updateReturning });
   mocks.updateSet.mockReturnValue({ where: mocks.updateWhere });
   mocks.txUpdate.mockReturnValue({ set: mocks.updateSet });
   mocks.activityEventValues.mockResolvedValue(undefined);
+  mocks.createActivityNotifications.mockResolvedValue(undefined);
   mocks.txInsert.mockImplementation((table) => {
     if (table === activityEvents) return { values: mocks.activityEventValues };
     throw new Error("Unexpected table insertion");
@@ -131,6 +147,10 @@ describe("POST /api/rfqs/[rfqId]/publish", () => {
       rfqId,
       metadata: {},
     }));
+    expect(mocks.createActivityNotifications).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recipientUserIds: [] }),
+    );
   });
 
   it("returns 404 for malformed or missing RFQs", async () => {

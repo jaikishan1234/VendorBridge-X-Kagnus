@@ -122,9 +122,8 @@ describe("POST /api/auth/register", () => {
     expect(response.status).toBe(201);
     expect(mocks.hashPassword).toHaveBeenCalledWith(validRegistration.password);
     expect(mocks.values).toHaveBeenCalledWith(
-      expect.objectContaining({ passwordHash }),
+      expect.objectContaining({ passwordHash, role: "VENDOR" }),
     );
-    expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("role");
     expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("password");
     expect(body).toEqual({
       message: "Registration successful",
@@ -135,7 +134,7 @@ describe("POST /api/auth/register", () => {
   });
 
   it.each(["ADMIN", "PROCUREMENT_OFFICER"] as const)(
-    "lets the database assign VENDOR when a client supplies %s",
+    "inserts VENDOR when a client supplies %s",
     async (role) => {
       mockExistingUserLookup([]);
       mockUserInsert();
@@ -150,7 +149,7 @@ describe("POST /api/auth/register", () => {
         message: "Registration successful",
         user: publicUser,
       });
-      expect(mocks.values.mock.calls[0][0]).not.toHaveProperty("role");
+      expect(mocks.values.mock.calls[0][0]).toMatchObject({ role: "VENDOR" });
     },
   );
 

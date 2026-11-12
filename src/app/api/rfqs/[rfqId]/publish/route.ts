@@ -2,8 +2,16 @@ import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { activityEvents, rfqLineItems, rfqVendorAssignments, rfqs } from "@/db/schema";
+import {
+  activityEvents,
+  rfqLineItems,
+  rfqVendorAssignments,
+  rfqs,
+  vendorUserMemberships,
+} from "@/db/schema";
 import { requireRole } from "@/lib/authorization";
+import { createActivityNotifications } from "@/lib/notifications";
+import { randomUUID } from "node:crypto";
 
 class RfqNotFoundError extends Error {}
 class RfqNotPublishableError extends Error {}
@@ -68,7 +76,9 @@ async function publishRfq(rfqId: string, actorUserId: string) {
 
     if (!published) throw new RfqNotPublishableError();
 
+    const activityEventId = randomUUID();
     await tx.insert(activityEvents).values({
+      id: activityEventId,
       eventType: "RFQ_PUBLISHED",
       actorUserId,
       isSystemGenerated: false,
@@ -77,6 +87,19 @@ async function publishRfq(rfqId: string, actorUserId: string) {
       rfqId: published.id,
       metadata: {},
       occurredAt,
+    });
+
+    const assignedVendorMembers = await tx
+      .select({ userId: vendorUserMemberships.userId })
+      .from(rfqVendorAssignments)
+      .innerJoin(
+        vendorUserMemberships,
+        eq(rfqVendorAssignments.vendorId, vendorUserMemberships.vendorId),
+      )
+      .where(eq(rfqVendorAssignments.rfqId, published.id));
+    await createActivityNotifications(tx, {
+      activityEventId,
+      recipientUserIds: assignedVendorMembers.map((member) => member.userId),
     });
 
     return published;

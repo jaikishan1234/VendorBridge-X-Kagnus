@@ -16,10 +16,16 @@ const mocks = vi.hoisted(() => ({
   quotationOnConflict: vi.fn(),
   quotationReturning: vi.fn(),
   activityEventValues: vi.fn(),
+  createActivityNotifications: vi.fn(),
+  getUserIdsForRole: vi.fn(),
 }));
 
 vi.mock("@/db", () => ({
   db: { transaction: mocks.transaction },
+}));
+vi.mock("@/lib/notifications", () => ({
+  createActivityNotifications: mocks.createActivityNotifications,
+  getUserIdsForRole: mocks.getUserIdsForRole,
 }));
 
 import { activityEvents, quotationLineItems, quotations } from "@/db/schema";
@@ -92,6 +98,8 @@ function configureTransaction(options: {
   mocks.quotationValues.mockReturnValue({ onConflictDoNothing: mocks.quotationOnConflict });
   mocks.lineItemValues.mockResolvedValue(undefined);
   mocks.activityEventValues.mockResolvedValue(undefined);
+  mocks.createActivityNotifications.mockResolvedValue(undefined);
+  mocks.getUserIdsForRole.mockResolvedValue(["procurement-user"]);
   mocks.txInsert.mockImplementation((table) => {
     if (table === quotations) return { values: mocks.quotationValues };
     if (table === quotationLineItems) return { values: mocks.lineItemValues };
@@ -209,5 +217,10 @@ describe("quotation persistence lifecycle boundary", () => {
       vendorId,
       metadata: {},
     }));
+    expect(mocks.getUserIdsForRole).toHaveBeenCalledWith(expect.anything(), "PROCUREMENT_OFFICER");
+    expect(mocks.createActivityNotifications).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recipientUserIds: ["procurement-user"] }),
+    );
   });
 });

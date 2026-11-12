@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/db";
@@ -12,6 +13,11 @@ import {
   users,
   vendors,
 } from "@/db/schema";
+import {
+  createActivityNotifications,
+  getUserIdsForRole,
+  getVendorMemberUserIds,
+} from "@/lib/notifications";
 import { calculateComparableTotal } from "@/lib/quotation-comparison";
 import type { ApprovalDecisionInput } from "@/lib/validations/approval";
 
@@ -96,7 +102,9 @@ export async function createApprovalRequest(
       occurredAt: selectedAt,
     });
 
+    const activityEventId = randomUUID();
     await tx.insert(activityEvents).values({
+      id: activityEventId,
       eventType: "APPROVAL_REQUESTED",
       actorUserId: selectedByUserId,
       isSystemGenerated: false,
@@ -108,6 +116,10 @@ export async function createApprovalRequest(
       vendorId: quotation.vendorId,
       metadata: {},
       occurredAt: selectedAt,
+    });
+    await createActivityNotifications(tx, {
+      activityEventId,
+      recipientUserIds: await getUserIdsForRole(tx, "MANAGER"),
     });
 
     return approval;
@@ -127,6 +139,7 @@ export async function decideApproval(
         quotationId: approvalRequests.quotationId,
         rfqId: approvalRequests.rfqId,
         vendorId: approvalRequests.vendorId,
+        selectedByUserId: approvalRequests.selectedByUserId,
       })
       .from(approvalRequests)
       .where(eq(approvalRequests.id, approvalId))
@@ -165,7 +178,9 @@ export async function decideApproval(
       occurredAt: decidedAt,
     });
 
+    const activityEventId = randomUUID();
     await tx.insert(activityEvents).values({
+      id: activityEventId,
       eventType: status === "APPROVED" ? "APPROVAL_APPROVED" : "APPROVAL_REJECTED",
       actorUserId: managerUserId,
       isSystemGenerated: false,
@@ -177,6 +192,13 @@ export async function decideApproval(
       vendorId: approval.vendorId,
       metadata: {},
       occurredAt: decidedAt,
+    });
+    await createActivityNotifications(tx, {
+      activityEventId,
+      recipientUserIds: [
+        approval.selectedByUserId,
+        ...(await getVendorMemberUserIds(tx, approval.vendorId)),
+      ],
     });
 
     return decided;

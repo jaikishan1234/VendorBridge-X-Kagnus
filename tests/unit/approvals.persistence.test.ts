@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ transaction: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  transaction: vi.fn(),
+  createActivityNotifications: vi.fn(),
+  getUserIdsForRole: vi.fn(),
+  getVendorMemberUserIds: vi.fn(),
+}));
 
 vi.mock("@/db", () => ({ db: { transaction: mocks.transaction } }));
+vi.mock("@/lib/notifications", () => ({
+  createActivityNotifications: mocks.createActivityNotifications,
+  getUserIdsForRole: mocks.getUserIdsForRole,
+  getVendorMemberUserIds: mocks.getVendorMemberUserIds,
+}));
 
 import {
   ActiveRfqApprovalError,
@@ -27,7 +37,12 @@ function selectResult(result: unknown) {
   return { from: vi.fn().mockReturnValue({ where }) };
 }
 
-beforeEach(() => vi.resetAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  mocks.createActivityNotifications.mockResolvedValue(undefined);
+  mocks.getUserIdsForRole.mockResolvedValue(["manager-user"]);
+  mocks.getVendorMemberUserIds.mockResolvedValue(["vendor-user"]);
+});
 
 describe("approval persistence", () => {
   it("writes the approval request and immutable submitted history event in one transaction", async () => {
@@ -73,6 +88,10 @@ describe("approval persistence", () => {
       vendorId,
       metadata: {},
     }));
+    expect(mocks.createActivityNotifications).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recipientUserIds: ["manager-user"] }),
+    );
   });
 
   it("rejects a competing active RFQ selection before writing", async () => {
@@ -100,6 +119,7 @@ describe("approval persistence", () => {
         quotationId,
         rfqId,
         vendorId,
+        selectedByUserId: userId,
       }])),
       update: vi.fn().mockReturnValue({
         set: vi.fn().mockReturnValue({
@@ -137,6 +157,10 @@ describe("approval persistence", () => {
       vendorId,
       metadata: {},
     }));
+    expect(mocks.createActivityNotifications).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recipientUserIds: [userId, "vendor-user"] }),
+    );
   });
 
   it("does not write history when a concurrent decision changes the pending row first", async () => {
@@ -165,6 +189,7 @@ describe("approval persistence", () => {
         quotationId,
         rfqId,
         vendorId,
+        selectedByUserId: userId,
       }])),
       update: vi.fn().mockReturnValue({
         set: vi.fn().mockReturnValue({
@@ -194,5 +219,9 @@ describe("approval persistence", () => {
       vendorId,
       metadata: {},
     }));
+    expect(mocks.createActivityNotifications).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ recipientUserIds: [userId, "vendor-user"] }),
+    );
   });
 });

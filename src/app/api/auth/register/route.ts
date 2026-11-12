@@ -58,6 +58,7 @@ export async function POST(request: Request) {
         lastName: data.lastName,
         phoneNumber: data.phoneNumber,
         passwordHash,
+        role: "VENDOR",
         country: data.country,
         photoUrl: data.photoUrl || null,
         additionalInformation: data.additionalInformation || null,

@@ -10,6 +10,7 @@ import {
   purchaseOrders,
   vendors,
 } from "@/db/schema";
+import { createActivityNotifications, getVendorMemberUserIds } from "@/lib/notifications";
 
 const maximumInvoiceNumberAttempts = 3;
 const centsPerWholeUnit = BigInt(100);
@@ -274,7 +275,9 @@ async function createInvoice(
         updatedAt: invoiceLineItems.updatedAt,
       });
 
+    const activityEventId = randomUUID();
     await tx.insert(activityEvents).values({
+      id: activityEventId,
       eventType: "INVOICE_GENERATED",
       actorUserId: generatedByUserId,
       isSystemGenerated: false,
@@ -285,6 +288,10 @@ async function createInvoice(
       invoiceId: invoice.id,
       metadata: {},
       occurredAt: issuedAt,
+    });
+    await createActivityNotifications(tx, {
+      activityEventId,
+      recipientUserIds: await getVendorMemberUserIds(tx, invoice.vendorId),
     });
 
     return { ...invoice, lineItems };

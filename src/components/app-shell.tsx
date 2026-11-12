@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { LogoutButton } from "@/components/auth/logout-button";
+import { NotificationBadge } from "@/components/notifications/notification-badge";
 import type { UserRole } from "@/db/schema";
 
 type AppShellUser = {
@@ -18,7 +19,9 @@ type AppShellProps = {
     | "Quotations"
     | "Approvals"
     | "Purchase Orders"
-    | "Invoices";
+    | "Invoices"
+    | "Activity"
+    | "Notifications";
   children: ReactNode;
 };
 
@@ -49,6 +52,7 @@ export function navigationHref(item: string, role: UserRole) {
   if (item === "Invoices" && (role === "PROCUREMENT_OFFICER" || role === "VENDOR")) {
     return "/invoices";
   }
+  if (item === "Activity") return "/activity";
 
   return `/dashboard?comingSoon=${encodeURIComponent(item)}`;
 }
@@ -86,6 +90,7 @@ export function AppShell({ user, activeItem, children }: AppShellProps) {
             VendorBridge
           </Link>
           <div className="flex items-center gap-3">
+            <NotificationBadge />
             <LogoutButton />
             <div
               aria-label={`Signed in as ${user.username}`}

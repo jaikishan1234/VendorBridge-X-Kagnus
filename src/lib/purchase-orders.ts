@@ -13,6 +13,7 @@ import {
   rfqs,
   vendors,
 } from "@/db/schema";
+import { createActivityNotifications, getVendorMemberUserIds } from "@/lib/notifications";
 
 const maximumPurchaseOrderNumberAttempts = 3;
 
@@ -284,7 +285,9 @@ async function createPurchaseOrder(
         updatedAt: purchaseOrderLineItems.updatedAt,
       });
 
+    const activityEventId = randomUUID();
     await tx.insert(activityEvents).values({
+      id: activityEventId,
       eventType: "PURCHASE_ORDER_GENERATED",
       actorUserId: generatedByUserId,
       isSystemGenerated: false,
@@ -297,6 +300,10 @@ async function createPurchaseOrder(
       purchaseOrderId: purchaseOrder.id,
       metadata: {},
       occurredAt: generatedAt,
+    });
+    await createActivityNotifications(tx, {
+      activityEventId,
+      recipientUserIds: await getVendorMemberUserIds(tx, purchaseOrder.vendorId),
     });
 
     return { ...purchaseOrder, lineItems };
