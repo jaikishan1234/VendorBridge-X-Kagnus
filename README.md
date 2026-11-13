@@ -2,6 +2,10 @@
 
 VendorBridge is a role-scoped procurement and vendor-management application. It supports vendor onboarding, RFQs, quotations, approvals, purchase orders, invoices, activity history, in-app notifications, reports, and purchase-order CSV export.
 
+## Live Demo
+
+VendorBridge is deployed on Vercel: [Open the production application](https://vendor-bridge-x-kagnus.vercel.app).
+
 ## Technology stack
 
 | Area | Technology |
@@ -276,6 +280,18 @@ Latest local verification:
 
 Integration tests were not run during final verification because they connect to the configured isolated Neon branch. Live end-to-end database testing is not claimed.
 
+## Deployment (Vercel)
+
+The production application is deployed with Vercel at [vendor-bridge-x-kagnus.vercel.app](https://vendor-bridge-x-kagnus.vercel.app).
+
+Vercel detects this as a Next.js application and uses the production build command:
+
+```bash
+npm run build
+```
+
+For a production redeployment, configure the applicable server-only environment variables from the sections above in the Vercel project settings, then create a Vercel Production deployment. Do not expose or commit any environment values, and do not add migration commands to the build or deployment process. The connected database must already be at the approved migration-0016 baseline; migrations 0017 and 0018 remain unapplied.
+
 ## Known limitations and external requirements
 
 - RFQ close, cancel, and edit workflows are not exposed; creation and publish-to-open are implemented.
@@ -288,8 +304,8 @@ Integration tests were not run during final verification because they connect to
 - Invoice PDFs require actual issuer/GST configuration; invoice email requires valid SMTP configuration.
 - The approved migration-0016 email model stores only `SENT` and `FAILED` outcomes. If SMTP is attempted but its outcome cannot be recorded, VendorBridge retains the 10-minute claim and returns an uncertain-outcome error; operators must review SMTP/provider evidence before retrying after that lease expires. This baseline cannot durably represent uncertainty or guarantee exactly-once delivery.
 - SMTP/inbox delivery, deployed PDF printing, and live end-to-end database workflow verification have not been independently demonstrated.
-- No deployment URL, screenshots, or recorded demonstration are included.
+- No screenshots or recorded demonstration are included.
 
 ## Submission companion
 
-[`SUBMISSION.md`](./SUBMISSION.md) contains a report-ready project overview, feature summary, architecture explanation, implementation decisions, known limitations, a suggested demonstration script, and a screenshot checklist. It deliberately does not claim a deployment URL, screenshots, demo accounts, or unperformed verification.
+[`SUBMISSION.md`](./SUBMISSION.md) contains a report-ready project overview, feature summary, architecture explanation, implementation decisions, known limitations, a suggested demonstration script, and a screenshot checklist. It includes the confirmed production URL but does not invent demo accounts or unperformed verification.

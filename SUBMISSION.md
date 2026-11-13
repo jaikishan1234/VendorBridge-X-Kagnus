@@ -6,6 +6,10 @@ VendorBridge is a role-scoped procurement and vendor-management ERP prototype. I
 
 The project focuses on a realistic procurement lifecycle with persisted PostgreSQL records rather than sample dashboard data. Workflow transitions create append-only activity events and recipient-specific in-app notifications, helping users understand what changed and what action is needed next.
 
+## Production deployment
+
+VendorBridge is deployed on Vercel at [https://vendor-bridge-x-kagnus.vercel.app](https://vendor-bridge-x-kagnus.vercel.app). This confirms the published application URL; the project does not claim unperformed live workflow, SMTP, or inbox-delivery verification.
+
 ## Feature-by-feature implementation summary
 
 | Area | Implementation |
@@ -62,7 +66,7 @@ Browser UI
 - Attachment workflows require configured ImageKit credentials. PDF generation requires factual issuer and GST configuration, and email delivery requires valid SMTP configuration.
 - Password reset storage and validation exist, but reset-email delivery is not implemented.
 - SMTP handoff, browser-based PDF printing in a deployment, and live end-to-end database workflow checks still need to be demonstrated in the final target environment.
-- No verified deployment URL, demo recording, or screenshots are included in this repository.
+- No demo recording or screenshots are included in this repository.
 
 ## Suggested demo-video walkthrough
 
@@ -103,5 +107,5 @@ Only record actions against safe demonstration data. Do not display environment 
 - [ ] Configure `DATABASE_URL`; configure ImageKit only when attachments are required.
 - [ ] Provide approved invoice issuer/GST values before demonstrating PDF generation, and approved SMTP values before demonstrating email.
 - [ ] Run `npm test`, `npx tsc --noEmit`, `npm run lint`, and `npm run build` in the final environment.
-- [ ] Verify the deployed workflow manually using safe demonstration records and retain the actual deployment URL only after verification.
+- [ ] Verify the deployed workflow manually using safe demonstration records; the confirmed production URL is [https://vendor-bridge-x-kagnus.vercel.app](https://vendor-bridge-x-kagnus.vercel.app).
 - [ ] Record the demo and capture the checklist screenshots without exposing secrets or sensitive business information.
