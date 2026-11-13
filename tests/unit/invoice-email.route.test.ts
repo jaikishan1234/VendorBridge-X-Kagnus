@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
   class InvoiceEmailSendInProgressError extends Error {}
   class InvoiceEmailDeliveryFailedError extends Error {}
   class InvoiceEmailAuditPersistenceError extends Error {}
+  class InvoiceEmailOutcomeUncertainError extends Error {}
   class InvoiceIssuerConfigurationError extends Error {}
   return {
     requireRole: vi.fn(),
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => {
     InvoiceEmailSendInProgressError,
     InvoiceEmailDeliveryFailedError,
     InvoiceEmailAuditPersistenceError,
+    InvoiceEmailOutcomeUncertainError,
     InvoiceIssuerConfigurationError,
   };
 });
@@ -33,6 +35,7 @@ vi.mock("@/lib/invoice-email", () => ({
   InvoiceEmailSendInProgressError: mocks.InvoiceEmailSendInProgressError,
   InvoiceEmailDeliveryFailedError: mocks.InvoiceEmailDeliveryFailedError,
   InvoiceEmailAuditPersistenceError: mocks.InvoiceEmailAuditPersistenceError,
+  InvoiceEmailOutcomeUncertainError: mocks.InvoiceEmailOutcomeUncertainError,
 }));
 
 import { POST, runtime } from "@/app/api/invoices/[invoiceId]/email/route";
@@ -103,6 +106,7 @@ describe("POST /api/invoices/[invoiceId]/email", () => {
     [mocks.InvoiceEmailSendInProgressError, 409],
     [mocks.InvoiceEmailConfigurationError, 500],
     [mocks.InvoiceEmailDeliveryFailedError, 502],
+    [mocks.InvoiceEmailOutcomeUncertainError, 502],
     [mocks.InvoiceEmailAuditPersistenceError, 500],
   ])("maps delivery errors safely", async (ErrorType, status) => {
     mocks.requireRole.mockResolvedValue({ authorized: true, user: procurementOfficer });

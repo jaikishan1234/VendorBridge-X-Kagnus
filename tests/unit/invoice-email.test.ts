@@ -42,10 +42,10 @@ vi.mock("drizzle-orm", () => ({
 import {
   getSmtpConfiguration,
   InvoiceEmailAlreadySentError,
-  InvoiceEmailAuditPersistenceError,
   InvoiceEmailConfigurationError,
   InvoiceEmailDeliveryFailedError,
   InvoiceEmailNotFoundError,
+  InvoiceEmailOutcomeUncertainError,
   InvoiceEmailSendInProgressError,
   sendInvoiceEmail,
 } from "@/lib/invoice-email";
@@ -370,7 +370,7 @@ describe("invoice email service", () => {
     expect(sendMail).toHaveBeenCalledOnce();
   });
 
-  it("does not report success if the SENT audit cannot be persisted", async () => {
+  it("retains the lease and reports an uncertain outcome if SMTP acceptance cannot be audited", async () => {
     mocks.renderInvoicePdf.mockResolvedValue(Buffer.from("%PDF"));
     mocks.createTransport.mockReturnValue({ sendMail: vi.fn().mockResolvedValue({}) });
     const { rootDeleteWhere } = configureDatabase({
@@ -379,9 +379,23 @@ describe("invoice email service", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(
-      InvoiceEmailAuditPersistenceError,
+      InvoiceEmailOutcomeUncertainError,
     );
-    expect(rootDeleteWhere).toHaveBeenCalledOnce();
+    expect(rootDeleteWhere).not.toHaveBeenCalled();
+  });
+
+  it("retains the lease when an SMTP attempt rejects and its FAILED audit cannot be persisted", async () => {
+    mocks.renderInvoicePdf.mockResolvedValue(Buffer.from("%PDF"));
+    mocks.createTransport.mockReturnValue({ sendMail: vi.fn().mockRejectedValue(new Error("SMTP disconnected")) });
+    const { rootDeleteWhere } = configureDatabase({
+      transactionInsertError: new Error("database unavailable"),
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(sendInvoiceEmail(invoice.id, actorUserId)).rejects.toBeInstanceOf(
+      InvoiceEmailOutcomeUncertainError,
+    );
+    expect(rootDeleteWhere).not.toHaveBeenCalled();
   });
 
   it("validates SMTP port and TLS values", () => {

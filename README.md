@@ -268,7 +268,7 @@ If PowerShell blocks `npm.ps1`, use `npm.cmd` or `npx.cmd`.
 
 Latest local verification:
 
-- **74 unit test files / 342 tests passed**
+- **75 unit test files / 346 tests passed**
 - TypeScript passed
 - ESLint passed
 - `git diff --check` passed
@@ -286,6 +286,7 @@ Integration tests were not run during final verification because they connect to
 - Reports cover generated documents, not actual payments or payment analytics.
 - ImageKit is required for attachment operations.
 - Invoice PDFs require actual issuer/GST configuration; invoice email requires valid SMTP configuration.
+- The approved migration-0016 email model stores only `SENT` and `FAILED` outcomes. If SMTP is attempted but its outcome cannot be recorded, VendorBridge retains the 10-minute claim and returns an uncertain-outcome error; operators must review SMTP/provider evidence before retrying after that lease expires. This baseline cannot durably represent uncertainty or guarantee exactly-once delivery.
 - SMTP/inbox delivery, deployed PDF printing, and live end-to-end database workflow verification have not been independently demonstrated.
 - No deployment URL, screenshots, or recorded demonstration are included.
 

@@ -7,6 +7,7 @@ import {
   InvoiceEmailConfigurationError,
   InvoiceEmailDeliveryFailedError,
   InvoiceEmailNotFoundError,
+  InvoiceEmailOutcomeUncertainError,
   InvoiceEmailSendInProgressError,
   sendInvoiceEmail,
 } from "@/lib/invoice-email";
@@ -72,6 +73,12 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     if (error instanceof InvoiceEmailDeliveryFailedError) {
       return NextResponse.json({ message: "Unable to send the invoice email." }, { status: 502 });
+    }
+    if (error instanceof InvoiceEmailOutcomeUncertainError) {
+      return NextResponse.json(
+        { message: "Invoice email outcome is uncertain. Do not retry until delivery is reviewed." },
+        { status: 502 },
+      );
     }
     if (error instanceof InvoiceEmailAuditPersistenceError) {
       return NextResponse.json(

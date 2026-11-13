@@ -29,6 +29,12 @@ export class InvoiceEmailAlreadySentError extends Error {}
 export class InvoiceEmailSendInProgressError extends Error {}
 export class InvoiceEmailDeliveryFailedError extends Error {}
 export class InvoiceEmailAuditPersistenceError extends Error {}
+/**
+ * SMTP may already have accepted the message when recording its outcome
+ * fails. Migration 0016 has no durable uncertainty state, so retain the
+ * active lease and require operator review before a later retry.
+ */
+export class InvoiceEmailOutcomeUncertainError extends Error {}
 
 type SmtpConfiguration = {
   host: string;
@@ -221,6 +227,7 @@ export async function sendInvoiceEmail(invoiceId: string, actorUserId: string) {
   }
 
   let finalized = false;
+  let retainClaimForUncertainOutcome = false;
   try {
     // A sender may have completed between the first SENT check and this claim.
     if (await hasSentDelivery(invoiceId)) throw new InvoiceEmailAlreadySentError();
@@ -256,6 +263,7 @@ export async function sendInvoiceEmail(invoiceId: string, actorUserId: string) {
       throw error;
     }
 
+    let smtpSubmissionStarted = false;
     try {
       const transporter = nodemailer.createTransport({
         host: smtp.host,
@@ -263,6 +271,7 @@ export async function sendInvoiceEmail(invoiceId: string, actorUserId: string) {
         secure: smtp.secure,
         auth: { user: smtp.user, pass: smtp.appPassword },
       });
+      smtpSubmissionStarted = true;
       await transporter.sendMail({
         from: smtp.from,
         to: invoice.vendor.email,
@@ -284,22 +293,41 @@ export async function sendInvoiceEmail(invoiceId: string, actorUserId: string) {
         ],
       });
     } catch (error) {
-      await persistDeliveryOutcome(
-        invoice,
-        actorUserId,
-        claimToken,
-        "FAILED",
-        deliveryFailureReason(error),
-      );
-      finalized = true;
+      try {
+        await persistDeliveryOutcome(
+          invoice,
+          actorUserId,
+          claimToken,
+          "FAILED",
+          deliveryFailureReason(error),
+        );
+        finalized = true;
+      } catch (auditError) {
+        if (
+          smtpSubmissionStarted &&
+          auditError instanceof InvoiceEmailAuditPersistenceError
+        ) {
+          retainClaimForUncertainOutcome = true;
+          throw new InvoiceEmailOutcomeUncertainError();
+        }
+        throw auditError;
+      }
       throw new InvoiceEmailDeliveryFailedError();
     }
 
-    await persistDeliveryOutcome(invoice, actorUserId, claimToken, "SENT", null);
-    finalized = true;
+    try {
+      await persistDeliveryOutcome(invoice, actorUserId, claimToken, "SENT", null);
+      finalized = true;
+    } catch (error) {
+      if (error instanceof InvoiceEmailAuditPersistenceError) {
+        retainClaimForUncertainOutcome = true;
+        throw new InvoiceEmailOutcomeUncertainError();
+      }
+      throw error;
+    }
     return { invoiceNumber: invoice.invoiceNumber, recipientEmail: invoice.vendor.email };
   } finally {
-    if (!finalized) {
+    if (!finalized && !retainClaimForUncertainOutcome) {
       try {
         await releaseInvoiceEmailClaim(invoiceId, claimToken);
       } catch (error) {

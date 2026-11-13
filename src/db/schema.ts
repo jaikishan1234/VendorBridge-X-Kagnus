@@ -66,19 +66,8 @@ export const invoiceStatusEnum = pgEnum("invoice_status", [
 
 export const invoiceEmailDeliveryStatusEnum = pgEnum(
   "invoice_email_delivery_status",
-  ["PREPARING", "SUBMITTING", "SENT", "FAILED", "UNCERTAIN", "ABANDONED"],
+  ["SENT", "FAILED"],
 );
-
-/**
- * This is a TypeScript/runtime sentinel only; it is not a database default and
- * never allocates an attempt number. The Stage 2 acquisition function must
- * provide the serialized number explicitly.
- */
-function requireAllocatedInvoiceEmailAttemptNumber(): never {
-  throw new Error(
-    "Invoice email attempts must use acquire_invoice_email_delivery_preparation.",
-  );
-}
 
 export const activityEventTypeEnum = pgEnum("activity_event_type", [
   "RFQ_CREATED",
@@ -91,8 +80,6 @@ export const activityEventTypeEnum = pgEnum("activity_event_type", [
   "INVOICE_GENERATED",
   "INVOICE_EMAIL_SENT",
   "INVOICE_EMAIL_FAILED",
-  "INVOICE_EMAIL_UNCERTAIN",
-  "INVOICE_EMAIL_UNCERTAIN_RETRY_AUTHORIZED",
 ]);
 
 export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
@@ -692,27 +679,14 @@ export const invoiceEmailDeliveries = pgTable(
     invoiceId: uuid("invoice_id")
       .notNull()
       .references(() => invoices.id, { onDelete: "cascade" }),
-    attemptNumber: integer("attempt_number")
-      .notNull()
-      .$defaultFn(requireAllocatedInvoiceEmailAttemptNumber),
-    requestedByUserId: uuid("requested_by_user_id").references(() => users.id),
     recipientEmail: text("recipient_email").notNull(),
     status: invoiceEmailDeliveryStatusEnum("status").notNull(),
     attemptedAt: timestamp("attempted_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
-    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
     failureReason: text("failure_reason"),
   },
   (table) => [
-    unique("invoice_email_deliveries_invoice_attempt_unique").on(
-      table.invoiceId,
-      table.attemptNumber,
-    ),
-    unique("invoice_email_deliveries_invoice_id_id_unique").on(
-      table.invoiceId,
-      table.id,
-    ),
     index("invoice_email_deliveries_invoice_attempted_at_idx").on(
       table.invoiceId,
       table.attemptedAt,
@@ -720,61 +694,9 @@ export const invoiceEmailDeliveries = pgTable(
     check(
       "invoice_email_deliveries_failure_reason_consistent",
       sql`(
-        (${table.status} IN ('PREPARING', 'SUBMITTING', 'SENT') AND ${table.failureReason} IS NULL)
+        (${table.status} = 'SENT' AND ${table.failureReason} IS NULL)
         OR
-        (${table.status} IN ('FAILED', 'UNCERTAIN', 'ABANDONED') AND ${table.failureReason} IS NOT NULL)
-      )`,
-    ),
-    check(
-      "invoice_email_deliveries_finalization_consistent",
-      sql`(
-        (${table.status} IN ('PREPARING', 'SUBMITTING') AND ${table.finalizedAt} IS NULL)
-        OR
-        (${table.status} IN ('SENT', 'FAILED', 'UNCERTAIN', 'ABANDONED') AND ${table.finalizedAt} IS NOT NULL)
-      )`,
-    ),
-    check(
-      "invoice_email_deliveries_attempt_number_positive",
-      sql`${table.attemptNumber} > 0`,
-    ),
-  ],
-);
-
-/** The current, concurrency-controlling state for an invoice-email attempt. */
-export const invoiceEmailDeliveryStates = pgTable(
-  "invoice_email_delivery_states",
-  {
-    invoiceId: uuid("invoice_id")
-      .primaryKey()
-      .references(() => invoices.id),
-    currentDeliveryId: uuid("current_delivery_id").notNull(),
-    currentStatus: invoiceEmailDeliveryStatusEnum("current_status").notNull(),
-    attemptToken: uuid("attempt_token").notNull(),
-    preparingExpiresAt: timestamp("preparing_expires_at", { withTimezone: true }),
-    submissionStartedAt: timestamp("submission_started_at", { withTimezone: true }),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    foreignKey({
-      name: "invoice_email_delivery_states_invoice_delivery_fk",
-      columns: [table.invoiceId, table.currentDeliveryId],
-      foreignColumns: [invoiceEmailDeliveries.invoiceId, invoiceEmailDeliveries.id],
-    }),
-    index("invoice_email_delivery_states_status_updated_at_idx").on(
-      table.currentStatus,
-      table.updatedAt,
-    ),
-    check(
-      "invoice_email_delivery_states_preparing_fields_consistent",
-      sql`(
-        (${table.currentStatus} = 'PREPARING'
-          AND ${table.preparingExpiresAt} IS NOT NULL
-          AND ${table.submissionStartedAt} IS NULL)
-        OR
-        (${table.currentStatus} <> 'PREPARING'
-          AND ${table.preparingExpiresAt} IS NULL)
+        (${table.status} = 'FAILED' AND ${table.failureReason} IS NOT NULL)
       )`,
     ),
   ],
@@ -976,7 +898,7 @@ export const activityEvents = pgTable(
           AND ${table.purchaseOrderId} IS NOT NULL
           AND ${table.affectedEntityId} = ${table.purchaseOrderId})
         OR
-        (${table.eventType} IN ('INVOICE_GENERATED', 'INVOICE_EMAIL_SENT', 'INVOICE_EMAIL_FAILED', 'INVOICE_EMAIL_UNCERTAIN', 'INVOICE_EMAIL_UNCERTAIN_RETRY_AUTHORIZED')
+        (${table.eventType} IN ('INVOICE_GENERATED', 'INVOICE_EMAIL_SENT', 'INVOICE_EMAIL_FAILED')
           AND ${table.affectedEntityType} = 'INVOICE'
           AND ${table.invoiceId} IS NOT NULL
           AND ${table.affectedEntityId} = ${table.invoiceId})
