@@ -13,7 +13,6 @@ type DashboardUser = {
 type DashboardShellProps = {
   dashboard: DashboardData | null;
   user: DashboardUser;
-  requestedFeature?: string;
 };
 
 function formatRole(role: UserRole) {
@@ -24,9 +23,7 @@ function formatAmount(currency: string, amount: string) {
   return `${currency} ${amount}`;
 }
 
-export function DashboardShell({ dashboard, user, requestedFeature }: DashboardShellProps) {
-  const knownFeature = ["RFQs", "Quotations", "Approvals", "Purchase Orders", "Invoices", "Reports", "Activity"].includes(requestedFeature ?? "") ? requestedFeature : undefined;
-
+export function DashboardShell({ dashboard, user }: DashboardShellProps) {
   return (
     <AppShell activeItem="Dashboard" user={user}>
       <section className="min-w-0 flex-1 p-5 sm:p-7 lg:p-8">
@@ -35,7 +32,6 @@ export function DashboardShell({ dashboard, user, requestedFeature }: DashboardS
           <p className="mt-2 text-sm text-[#c7c7c7] sm:text-base">Welcome back, {user.username} &middot; {formatRole(user.role)}</p>
         </header>
 
-        {knownFeature ? <div className="mt-5 rounded-[4px] border border-[#6e6e6e] bg-[#151515] px-4 py-3 text-sm text-[#d6d6d6]" role="status">{knownFeature} is coming soon. This Week 1 dashboard does not include that module yet.</div> : null}
         {!dashboard ? <div className="mt-5 rounded-[4px] border border-[#9e5a5a] bg-[#2a1717] px-4 py-3 text-sm text-[#f0c9c9]" role="alert">Dashboard data is unavailable. Please try again later.</div> : null}
 
         {dashboard?.metrics.length ? (

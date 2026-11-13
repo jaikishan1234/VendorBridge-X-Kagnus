@@ -39,7 +39,7 @@ describe("/dashboard page", () => {
     mocks.getCurrentUser.mockResolvedValue(user);
     mocks.getDashboardData.mockResolvedValue(dashboard);
 
-    const page = await DashboardPage({ searchParams: Promise.resolve({}) });
+    const page = await DashboardPage();
 
     expect(mocks.getDashboardData).toHaveBeenCalledWith(user);
     expect(page.props.dashboard).toEqual(dashboard);
@@ -50,7 +50,7 @@ describe("/dashboard page", () => {
     mocks.getDashboardData.mockRejectedValue(new Error("database unavailable"));
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    const page = await DashboardPage({ searchParams: Promise.resolve({}) });
+    const page = await DashboardPage();
 
     expect(page.props.dashboard).toBeNull();
     expect(error).toHaveBeenCalled();
@@ -60,7 +60,7 @@ describe("/dashboard page", () => {
     mocks.getCurrentUser.mockResolvedValue(null);
     mocks.redirect.mockImplementation(() => { throw new Error("NEXT_REDIRECT"); });
 
-    await expect(DashboardPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_REDIRECT");
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(mocks.getDashboardData).not.toHaveBeenCalled();
   });
 });

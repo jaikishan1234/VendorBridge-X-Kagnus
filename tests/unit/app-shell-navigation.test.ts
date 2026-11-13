@@ -52,5 +52,6 @@ describe("application-shell quotation navigation", () => {
     expect(navigationHref("Approvals", "MANAGER")).toBe("/approvals");
     expect(navigationItemsForRole("MANAGER")).toEqual(["Dashboard", "Approvals", "Activity"]);
     expect(navigationItemsForRole("ADMIN")).toEqual(["Dashboard"]);
+    expect(navigationHref("Reports", "VENDOR")).toBe("/dashboard");
   });
 });

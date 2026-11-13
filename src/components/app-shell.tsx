@@ -56,7 +56,10 @@ export function navigationHref(item: string, role: UserRole) {
   if (item === "Activity") return "/activity";
   if (item === "Reports" && role === "PROCUREMENT_OFFICER") return "/reports";
 
-  return `/dashboard?comingSoon=${encodeURIComponent(item)}`;
+  // Navigation items are filtered per role before rendering. Keep an
+  // intentionally safe fallback for callers outside the shell rather than
+  // exposing a stale placeholder route.
+  return "/dashboard";
 }
 
 export function navigationLabel(item: string, role: UserRole) {

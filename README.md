@@ -268,7 +268,7 @@ If PowerShell blocks `npm.ps1`, use `npm.cmd` or `npx.cmd`.
 
 Latest local verification:
 
-- **72 unit test files / 336 tests passed**
+- **74 unit test files / 342 tests passed**
 - TypeScript passed
 - ESLint passed
 - `git diff --check` passed
@@ -288,3 +288,7 @@ Integration tests were not run during final verification because they connect to
 - Invoice PDFs require actual issuer/GST configuration; invoice email requires valid SMTP configuration.
 - SMTP/inbox delivery, deployed PDF printing, and live end-to-end database workflow verification have not been independently demonstrated.
 - No deployment URL, screenshots, or recorded demonstration are included.
+
+## Submission companion
+
+[`SUBMISSION.md`](./SUBMISSION.md) contains a report-ready project overview, feature summary, architecture explanation, implementation decisions, known limitations, a suggested demonstration script, and a screenshot checklist. It deliberately does not claim a deployment URL, screenshots, demo accounts, or unperformed verification.
