@@ -4,7 +4,31 @@ VendorBridge is a role-scoped procurement and vendor-management application. It 
 
 ## Live Demo
 
-VendorBridge is deployed on Vercel: [Open the production application](https://vendor-bridge-x-kagnus.vercel.app).
+VendorBridge is successfully deployed on Vercel: [Open the production application](https://vendor-bridge-x-kagnus.vercel.app).
+
+## Application screenshots
+
+The following screenshots were captured from the application for the Week 4 submission.
+
+![Procurement Officer dashboard and navigation](docs/screenshots/01-dashboard.png)
+
+*Procurement Officer dashboard and role-scoped navigation.*
+
+![RFQ workspace](docs/screenshots/02-rfq.png)
+
+*RFQ workflow view.*
+
+![Quotation comparison](docs/screenshots/03-quotations.png)
+
+*Procurement quotation comparison view.*
+
+![Purchase orders and invoices](docs/screenshots/04-purchase-orders-invoices.png)
+
+*Purchase-order and invoice workflow views.*
+
+![Procurement reports](docs/screenshots/05-reports.png)
+
+*Procurement reports and analytics view.*
 
 ## Technology stack
 
@@ -30,7 +54,7 @@ VendorBridge is deployed on Vercel: [Open the production application](https://ve
 
 ## Authentication and role-based access
 
-Passwords are Argon2 hashes. Session tokens are random values stored in HTTP-only, `SameSite=Lax` cookies; only their SHA-256 hashes and expiry are stored in PostgreSQL. Password-reset tokens are one-time hashed records. Password-reset email delivery is not implemented.
+VendorBridge uses custom database-backed session authentication, not Better Auth. Passwords are Argon2 hashes. Session tokens are random values stored in HTTP-only, `SameSite=Lax` cookies; only their SHA-256 hashes and expiry are stored in PostgreSQL. Password-reset tokens are one-time hashed records. Password-reset email delivery is not implemented.
 
 Public registration has no role selector. The server explicitly inserts `role: "VENDOR"`, which is required for the current migration 0016 demo baseline because `users.role` is non-null with no database default.
 
@@ -64,6 +88,8 @@ Vendor identity is derived from `vendor_user_memberships`, never from a client-s
 ### Activity timeline and notifications
 
 `activity_events` is append-only. `/activity` shows real persisted events in reverse chronological order with actor and procurement-record context where available.
+
+Activity logging is implemented for new workflow actions. The production `activity_events` table currently has zero historical records because the activity feature was introduced after the existing RFQ, quotation, approval, purchase-order, and invoice records; no synthetic backfill has been created.
 
 - Procurement Officers see procurement activity.
 - Managers see approval activity.
@@ -302,9 +328,10 @@ For a production redeployment, configure the applicable server-only environment 
 - Reports cover generated documents, not actual payments or payment analytics.
 - ImageKit is required for attachment operations.
 - Invoice PDFs require actual issuer/GST configuration; invoice email requires valid SMTP configuration.
+- PDF generation has been manually verified. SMTP email delivery has not been independently verified.
 - The approved migration-0016 email model stores only `SENT` and `FAILED` outcomes. If SMTP is attempted but its outcome cannot be recorded, VendorBridge retains the 10-minute claim and returns an uncertain-outcome error; operators must review SMTP/provider evidence before retrying after that lease expires. This baseline cannot durably represent uncertainty or guarantee exactly-once delivery.
-- SMTP/inbox delivery, deployed PDF printing, and live end-to-end database workflow verification have not been independently demonstrated.
-- No screenshots or recorded demonstration are included.
+- SMTP/inbox delivery, deployed PDF printing, and all live end-to-end role/workflow scenarios have not been independently demonstrated.
+- Five application screenshots are included above; no recorded demonstration is included.
 
 ## Submission companion
 
